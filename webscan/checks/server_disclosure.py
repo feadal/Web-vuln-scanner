@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from webscan.checks.base import Check
+from webscan.checks.base import PassiveCheck
 from webscan.models import Finding, ScanContext, Severity
 
 # Headers that commonly disclose technology / version details.
@@ -19,9 +19,9 @@ _DISCLOSURE_HEADERS = {
 _VERSION_RE = re.compile(r"\d+\.\d+")
 
 
-class ServerDisclosureCheck(Check):
+class ServerDisclosureCheck(PassiveCheck):
     name = "server-disclosure"
-    description = "Ищет раскрытие версий ПО в заголовках (Server, X-Powered-By, ...)"
+    description = "Looks for software/version disclosure in headers (Server, X-Powered-By, ...)"
 
     def run(self, ctx: ScanContext) -> list[Finding]:
         resp = ctx.base_response
@@ -36,15 +36,15 @@ class ServerDisclosureCheck(Check):
             has_version = bool(_VERSION_RE.search(value))
             findings.append(
                 self.finding(
-                    title=f"Заголовок {label} раскрывает технологию"
-                    + (": версия видна" if has_version else ""),
+                    title=f"{label} header discloses technology"
+                    + (" version" if has_version else ""),
                     severity=Severity.LOW if has_version else Severity.INFO,
                     description=(
-                        "Раскрытие точной версии упрощает атакующему подбор "
-                        "известных уязвимостей."
+                        "Disclosing the exact version makes it easier for an attacker "
+                        "to look up known vulnerabilities."
                     ),
                     evidence=f"{label}: {value}",
-                    remediation=f"Уберите или обезличьте заголовок {label}.",
+                    remediation=f"Remove or obfuscate the {label} header.",
                     url=resp.url,
                 )
             )

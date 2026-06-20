@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from webscan.checks.base import Check
+from webscan.checks.base import PassiveCheck
 from webscan.models import Finding, ScanContext, Severity
 
 
-class CookieFlagsCheck(Check):
+class CookieFlagsCheck(PassiveCheck):
     name = "cookies"
-    description = "Проверяет флаги Secure / HttpOnly / SameSite у Set-Cookie"
+    description = "Checks Secure / HttpOnly / SameSite flags on Set-Cookie"
 
     def run(self, ctx: ScanContext) -> list[Finding]:
         resp = ctx.base_response
@@ -30,33 +30,33 @@ class CookieFlagsCheck(Check):
             if "httponly" not in attrs:
                 findings.append(
                     self.finding(
-                        title=f"Cookie '{name}' без флага HttpOnly",
+                        title=f"Cookie '{name}' is missing the HttpOnly flag",
                         severity=Severity.MEDIUM,
-                        description="Cookie доступна из JavaScript и может быть украдена при XSS.",
+                        description="The cookie is readable from JavaScript and can be stolen via XSS.",
                         evidence=raw,
-                        remediation="Добавьте атрибут HttpOnly, если cookie не нужна на клиенте.",
+                        remediation="Add the HttpOnly attribute if the cookie is not needed client-side.",
                         url=resp.url,
                     )
                 )
             if is_https and "secure" not in attrs:
                 findings.append(
                     self.finding(
-                        title=f"Cookie '{name}' без флага Secure",
+                        title=f"Cookie '{name}' is missing the Secure flag",
                         severity=Severity.MEDIUM,
-                        description="Cookie может уйти по незашифрованному HTTP-соединению.",
+                        description="The cookie may be sent over an unencrypted HTTP connection.",
                         evidence=raw,
-                        remediation="Добавьте атрибут Secure, чтобы cookie слалась только по HTTPS.",
+                        remediation="Add the Secure attribute so the cookie is sent over HTTPS only.",
                         url=resp.url,
                     )
                 )
             if "samesite" not in attrs:
                 findings.append(
                     self.finding(
-                        title=f"Cookie '{name}' без атрибута SameSite",
+                        title=f"Cookie '{name}' is missing the SameSite attribute",
                         severity=Severity.LOW,
-                        description="Без SameSite cookie участвует в межсайтовых запросах (риск CSRF).",
+                        description="Without SameSite the cookie rides along on cross-site requests (CSRF risk).",
                         evidence=raw,
-                        remediation="Задайте 'SameSite=Lax' или 'SameSite=Strict'.",
+                        remediation="Set 'SameSite=Lax' or 'SameSite=Strict'.",
                         url=resp.url,
                     )
                 )

@@ -8,62 +8,79 @@ import sys
 from typing import Optional, Sequence
 
 from webscan import __version__
-from webscan.checks import all_checks, check_names, select_checks
+from webscan.checks import all_active, all_names, all_passive, select
 from webscan.http_client import HttpClient
 from webscan.models import Severity
 from webscan.report import render_json, render_text
 from webscan.scanner import Scanner
 
 _BANNER = (
-    "webscan — используйте ТОЛЬКО для систем, на тестирование которых у вас есть "
-    "разрешение."
+    "webscan sends active probes. Use it ONLY against systems you own or are "
+    "explicitly authorized to test."
 )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="webscan",
-        description="Лёгкий пассивный сканер веб-уязвимостей для авторизованного тестирования.",
+        description="Active web vulnerability scanner for authorized testing.",
         epilog=_BANNER,
     )
-    parser.add_argument("target", nargs="?", help="URL или хост цели, напр. https://example.com")
+    parser.add_argument("target", nargs="?", help="Target URL or host, e.g. https://example.com")
     parser.add_argument(
         "--checks",
-        help="Список проверок через запятую (по умолчанию — все). См. --list-checks.",
+        help="Comma-separated checks to run (default: all). See --list-checks.",
     )
     parser.add_argument(
-        "--list-checks", action="store_true", help="Показать доступные проверки и выйти"
+        "--passive-only",
+        action="store_true",
+        help="Run only passive checks; send no active probes",
     )
     parser.add_argument(
-        "--format", choices=["text", "json"], default="text", help="Формат вывода (по умолчанию text)"
-    )
-    parser.add_argument("--output", "-o", help="Записать отчёт в файл вместо stdout")
-    parser.add_argument(
-        "--timeout", type=float, default=10.0, help="Таймаут запроса в секундах (по умолчанию 10)"
+        "--list-checks", action="store_true", help="List available checks and exit"
     )
     parser.add_argument(
-        "--delay", type=float, default=0.0, help="Пауза между запросами в секундах (вежливость)"
+        "--max-pages", type=int, default=10, help="Max pages to crawl for inputs (default 10)"
+    )
+    parser.add_argument(
+        "--max-requests",
+        type=int,
+        default=1000,
+        help="Hard cap on total HTTP requests for the scan (default 1000)",
+    )
+    parser.add_argument(
+        "--format", choices=["text", "json"], default="text", help="Output format (default text)"
+    )
+    parser.add_argument("--output", "-o", help="Write the report to a file instead of stdout")
+    parser.add_argument(
+        "--timeout", type=float, default=10.0, help="Per-request timeout in seconds (default 10)"
+    )
+    parser.add_argument(
+        "--delay", type=float, default=0.0, help="Delay between requests in seconds (politeness)"
     )
     parser.add_argument(
         "--insecure",
         "-k",
         action="store_true",
-        help="Не проверять TLS-сертификат (для лабораторных self-signed)",
+        help="Do not verify the TLS certificate (for lab self-signed certs)",
     )
     parser.add_argument(
         "--fail-on",
         choices=[s.value for s in Severity],
         default="medium",
-        help="Минимальная серьёзность находки, при которой код возврата = 1 (по умолчанию medium)",
+        help="Minimum severity that makes the exit code 1 (default medium)",
     )
-    parser.add_argument("--verbose", "-v", action="store_true", help="Подробный лог")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
     parser.add_argument("--version", action="version", version=f"webscan {__version__}")
     return parser
 
 
 def _print_checks() -> None:
-    print("Доступные проверки:\n")
-    for check in all_checks():
+    print("Passive checks (always safe):\n")
+    for check in all_passive():
+        print(f"  {check.name.ljust(18)} {check.description}")
+    print("\nActive checks (send probes — authorized targets only):\n")
+    for check in all_active():
         print(f"  {check.name.ljust(18)} {check.description}")
 
 
@@ -81,12 +98,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if not args.target:
-        parser.error("не указана цель (target). Пример: webscan https://example.com")
+        parser.error("no target given. Example: webscan https://example.com")
 
     try:
-        checks = select_checks(_split(args.checks)) if args.checks else all_checks()
+        if args.checks:
+            passive, active = select(_split(args.checks))
+        else:
+            passive, active = all_passive(), all_active()
     except KeyError as exc:
-        parser.error(f"неизвестная проверка: {exc}. Доступные: {', '.join(check_names())}")
+        parser.error(f"unknown check: {exc}. Available: {', '.join(all_names())}")
+
+    if args.passive_only:
+        active = []
 
     if args.format == "text":
         print(_BANNER, file=sys.stderr)
@@ -95,8 +118,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         timeout=args.timeout,
         verify_tls=not args.insecure,
         delay=args.delay,
+        max_requests=args.max_requests,
     )
-    scanner = Scanner(client=client, checks=checks)
+    scanner = Scanner(
+        client=client,
+        passive_checks=passive,
+        active_checks=active,
+        active=bool(active),
+        max_pages=args.max_pages,
+    )
 
     try:
         result = scanner.scan(args.target)
@@ -107,7 +137,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.output:
         with open(args.output, "w", encoding="utf-8") as fh:
             fh.write(output + "\n")
-        print(f"Отчёт записан в {args.output}", file=sys.stderr)
+        print(f"Report written to {args.output}", file=sys.stderr)
     else:
         print(output)
 

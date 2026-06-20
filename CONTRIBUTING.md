@@ -1,48 +1,70 @@
-# Как внести вклад
+# Contributing
 
-Спасибо за интерес к проекту! Вклад приветствуется — от исправления опечаток до новых проверок.
+Thanks for your interest! Contributions are welcome — from typo fixes to new checks.
 
-## Окружение
+## Setup
 
 ```bash
-git clone https://github.com/your-org/webscan.git
-cd webscan
+git clone https://github.com/feadal/Web-vuln-scanner.git
+cd Web-vuln-scanner
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-## Перед отправкой PR
+## Before opening a PR
 
 ```bash
-ruff check .     # линтер должен проходить без ошибок
-pytest -q        # все тесты зелёные
+ruff check .     # linter must pass
+pytest -q        # all tests green (they run fully offline)
 ```
 
-## Добавление новой проверки
+## Adding a check
 
-1. Создайте файл `webscan/checks/my_check.py` с классом — наследником `Check`:
+Checks come in two flavours.
 
-   ```python
-   from webscan.checks.base import Check
-   from webscan.models import Finding, ScanContext, Severity
+**Passive** — inspects the already-fetched landing page, sends nothing extra:
 
-   class MyCheck(Check):
-       name = "my-check"
-       description = "Что проверяет (одной строкой)"
+```python
+from webscan.checks.base import PassiveCheck
+from webscan.models import Finding, ScanContext, Severity
 
-       def run(self, ctx: ScanContext) -> list[Finding]:
-           findings = []
-           # ... ваша логика ...
-           return findings
-   ```
+class MyCheck(PassiveCheck):
+    name = "my-check"
+    description = "What it checks (one line)"
 
-2. Зарегистрируйте класс в `ALL_CHECKS` в `webscan/checks/__init__.py`.
-3. Добавьте юнит-тесты в `tests/` (используйте офлайн-моки, не ходите в сеть).
-4. Обновите таблицу проверок в `README.md`.
+    def run(self, ctx: ScanContext) -> list[Finding]:
+        ...
+        return findings
+```
 
-## Принципы
+**Active** — probes a single injection point with a benign payload:
 
-- **Безопасность по умолчанию.** Проверки должны быть пассивными или низкоинтенсивными.
-  Никакой эксплуатации, перебора паролей, DoS или деструктивных запросов.
-- **Минимум зависимостей.** Старайтесь обходиться стандартной библиотекой и `requests`.
-- **Без ложных срабатываний.** Лучше пропустить, чем выдать уверенную ложную находку.
+```python
+from webscan.checks.base import ActiveCheck
+from webscan.http_client import HttpClient
+from webscan.models import Finding, InjectionPoint, Severity
+
+class MyActiveCheck(ActiveCheck):
+    name = "my-active-check"
+    description = "What it detects (one line)"
+
+    def test(self, point: InjectionPoint, client: HttpClient) -> list[Finding]:
+        resp = self.send(client, point, "payload")   # mutates point.param only
+        ...
+        return findings
+```
+
+Then register the class in `PASSIVE_CHECKS` or `ACTIVE_CHECKS` in
+`webscan/checks/__init__.py`, add offline tests under `tests/`, and update the
+table in `README.md`.
+
+## Principles
+
+- **Detection, not exploitation.** Payloads must be non-destructive: trigger an
+  error, get reflected, read a world-readable file, or echo a benign value. No
+  data modification, no privilege escalation, no DoS, no destructive requests.
+- **Stay bounded.** Respect the request budget and same-host scope. Don't add
+  unbounded brute-forcing.
+- **Minimise false positives.** Prefer firm signals; mark heuristics as
+  `confidence="tentative"`.
+- **Few dependencies.** Stick to the standard library and `requests` where you can.

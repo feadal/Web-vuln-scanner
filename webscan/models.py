@@ -40,7 +40,12 @@ _SEVERITY_ORDER = [Severity.INFO, Severity.LOW, Severity.MEDIUM, Severity.HIGH]
 
 @dataclass
 class Finding:
-    """A single issue reported by a check."""
+    """A single issue reported by a check.
+
+    ``confidence`` is "firm" when the signal is unambiguous (e.g. a database
+    error message reflected back) and "tentative" for heuristic/differential
+    signals that a human should confirm.
+    """
 
     check: str
     title: str
@@ -49,26 +54,50 @@ class Finding:
     evidence: str = ""
     remediation: str = ""
     url: str = ""
+    param: str = ""
+    confidence: str = "firm"
 
     def to_dict(self) -> dict:
         return {
             "check": self.check,
             "title": self.title,
             "severity": self.severity.value,
+            "confidence": self.confidence,
             "description": self.description,
             "evidence": self.evidence,
             "remediation": self.remediation,
             "url": self.url,
+            "param": self.param,
         }
+
+    def dedup_key(self) -> tuple:
+        return (self.check, self.title, self.url, self.param)
+
+
+@dataclass
+class InjectionPoint:
+    """A single fuzzable input discovered by the crawler.
+
+    ``params`` holds every parameter/field with its baseline value; an active
+    check mutates exactly one of them (``param``) at a time.
+    """
+
+    method: str  # "GET" or "POST"
+    url: str  # request URL (form action or page URL, without payload)
+    param: str  # the parameter currently under test
+    params: dict[str, str] = field(default_factory=dict)
+    source: str = "query"  # "query" or "form"
+
+    def label(self) -> str:
+        return f"{self.method} {self.url} [{self.param}]"
 
 
 @dataclass
 class ScanContext:
-    """Everything a check needs to do its work.
+    """Everything a passive check needs to do its work.
 
     The scanner fetches the target's landing page once and shares the response
-    (and its decoded HTML body) with every check, so most checks make zero
-    additional requests. Checks that need more requests use ``client``.
+    (and its decoded HTML body) with every passive check.
     """
 
     target: str
@@ -84,6 +113,16 @@ class ScanResult:
     target: str
     findings: list[Finding] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    injection_points: int = 0
+    requests_made: int = 0
+
+    def add(self, finding: Finding) -> bool:
+        """Append ``finding`` unless an identical one is already present."""
+        keys = {f.dedup_key() for f in self.findings}
+        if finding.dedup_key() in keys:
+            return False
+        self.findings.append(finding)
+        return True
 
     def sorted_findings(self) -> list[Finding]:
         """Findings ordered from highest to lowest severity, stable by check name."""
@@ -105,5 +144,7 @@ class ScanResult:
             "target": self.target,
             "findings": [f.to_dict() for f in self.sorted_findings()],
             "counts": self.counts(),
+            "injection_points": self.injection_points,
+            "requests_made": self.requests_made,
             "errors": self.errors,
         }

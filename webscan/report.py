@@ -28,26 +28,34 @@ def render_text(result: ScanResult, *, color: bool | None = None) -> str:
 
     lines: list[str] = []
     lines.append(f"webscan {__version__} — target: {result.target}")
+    lines.append(
+        f"crawled injection points: {result.injection_points} · "
+        f"requests sent: {result.requests_made}"
+    )
     lines.append("")
 
     findings = result.sorted_findings()
     if not findings:
-        lines.append("Находок нет. ✓")
+        lines.append("No findings. ✓")
     else:
         for f in findings:
             tag = f"[{f.severity.value.upper()}]".ljust(9)
             if color:
                 tag = _COLORS[f.severity] + tag + _RESET
-            lines.append(f"{tag} {f.check.ljust(17)} {f.title}")
+            suffix = "  (tentative)" if f.confidence == "tentative" else ""
+            where = f"  →  param '{f.param}'" if f.param else ""
+            lines.append(f"{tag} {f.check.ljust(17)} {f.title}{suffix}")
             if f.evidence:
-                lines.append(f"          ↳ {f.evidence}")
+                lines.append(f"          ↳ {f.evidence}{where}")
+            elif where:
+                lines.append(f"          ↳{where}")
 
     lines.append("")
     lines.append(_summary_line(result))
 
     if result.errors:
         lines.append("")
-        lines.append("Ошибки во время сканирования:")
+        lines.append("Scan notes:")
         for err in result.errors:
             lines.append(f"  ! {err}")
 
@@ -58,10 +66,10 @@ def _summary_line(result: ScanResult) -> str:
     counts = result.counts()
     total = sum(counts.values())
     if total == 0:
-        return "Итого: 0 находок"
+        return "Total: 0 findings"
     parts = [
         f"{counts[s.value]} {s.value}"
         for s in (Severity.HIGH, Severity.MEDIUM, Severity.LOW, Severity.INFO)
         if counts[s.value]
     ]
-    return f"Итого: {total} находок ({', '.join(parts)})"
+    return f"Total: {total} findings ({', '.join(parts)})"

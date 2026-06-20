@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "webscan"
-version = "0.1.0"
-description = "A lightweight passive web vulnerability scanner for authorized security testing"
+version = "0.2.0"
+description = "A lightweight active web vulnerability scanner for authorized security testing"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -31,8 +31,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/webscan"
-Issues = "https://github.com/your-org/webscan/issues"
+Homepage = "https://github.com/feadal/Web-vuln-scanner"
+Issues = "https://github.com/feadal/Web-vuln-scanner/issues"
 
 [project.scripts]
 webscan = "webscan.cli:main"

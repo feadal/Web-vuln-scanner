@@ -1,4 +1,5 @@
-"""Orchestrates a scan: fetch the target once, run each check, collect findings."""
+"""Orchestrates a scan: passive pass over the landing page, then an optional
+active pass that crawls for injection points and probes each one."""
 
 from __future__ import annotations
 
@@ -7,8 +8,9 @@ from typing import Optional, Sequence
 
 import requests
 
-from webscan.checks import Check, all_checks
-from webscan.http_client import HttpClient
+from webscan import crawler
+from webscan.checks import ActiveCheck, PassiveCheck, all_active, all_passive
+from webscan.http_client import BudgetExceeded, HttpClient
 from webscan.models import ScanContext, ScanResult
 
 log = logging.getLogger("webscan")
@@ -18,10 +20,21 @@ class Scanner:
     def __init__(
         self,
         client: Optional[HttpClient] = None,
-        checks: Optional[Sequence[Check]] = None,
+        passive_checks: Optional[Sequence[PassiveCheck]] = None,
+        active_checks: Optional[Sequence[ActiveCheck]] = None,
+        *,
+        active: bool = True,
+        max_pages: int = 10,
     ) -> None:
         self.client = client or HttpClient()
-        self.checks = list(checks) if checks is not None else all_checks()
+        self.passive_checks = (
+            list(passive_checks) if passive_checks is not None else all_passive()
+        )
+        self.active_checks = (
+            list(active_checks) if active_checks is not None else all_active()
+        )
+        self.active = active
+        self.max_pages = max_pages
 
     def scan(self, target: str) -> ScanResult:
         target = _normalize_target(target)
@@ -35,24 +48,70 @@ class Scanner:
             base_html=base_html,
         )
 
-        for check in self.checks:
+        self._run_passive(ctx, result)
+
+        if self.active and self.active_checks and base_response is not None:
+            self._run_active(base_response.url, base_html, result)
+
+        result.requests_made = self.client.requests_made
+        return result
+
+    # -- passive ------------------------------------------------------------
+
+    def _run_passive(self, ctx: ScanContext, result: ScanResult) -> None:
+        for check in self.passive_checks:
             try:
                 findings = check.run(ctx)
+            except BudgetExceeded as exc:
+                result.errors.append(f"Stopped early: {exc}")
+                return
             except Exception as exc:  # one broken check shouldn't sink the scan
-                log.warning("check %s raised: %s", check.name, exc)
+                log.warning("passive check %s raised: %s", check.name, exc)
                 result.errors.append(f"{check.name}: {exc}")
                 continue
-            result.findings.extend(findings)
+            for f in findings:
+                result.add(f)
 
-        return result
+    # -- active -------------------------------------------------------------
+
+    def _run_active(self, base_url: str, base_html: str, result: ScanResult) -> None:
+        try:
+            points = crawler.discover(
+                self.client, base_url, base_html, max_pages=self.max_pages
+            )
+        except BudgetExceeded as exc:
+            result.errors.append(f"Stopped early during crawl: {exc}")
+            return
+
+        result.injection_points = len(points)
+        if not points:
+            return
+
+        try:
+            for point in points:
+                for check in self.active_checks:
+                    try:
+                        findings = check.test(point, self.client)
+                    except Exception as exc:
+                        log.warning("active check %s raised: %s", check.name, exc)
+                        result.errors.append(f"{check.name} ({point.label()}): {exc}")
+                        continue
+                    for f in findings:
+                        result.add(f)
+        except BudgetExceeded as exc:
+            result.errors.append(f"Stopped early: {exc}")
+
+    # -- helpers ------------------------------------------------------------
 
     def _fetch_base(self, target: str, result: ScanResult):
         try:
             resp = self.client.get(target)
-        except requests.RequestException as exc:
-            result.errors.append(f"Не удалось загрузить {target}: {exc}")
+        except BudgetExceeded as exc:
+            result.errors.append(str(exc))
             return None, ""
-        # Only parse HTML bodies; skip binary/large non-HTML responses.
+        except requests.RequestException as exc:
+            result.errors.append(f"Could not load {target}: {exc}")
+            return None, ""
         content_type = resp.headers.get("Content-Type", "")
         html = resp.text if "html" in content_type.lower() else ""
         return resp, html

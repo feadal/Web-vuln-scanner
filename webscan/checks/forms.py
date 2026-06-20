@@ -8,7 +8,7 @@ from __future__ import annotations
 from html.parser import HTMLParser
 from urllib.parse import urlparse
 
-from webscan.checks.base import Check
+from webscan.checks.base import PassiveCheck
 from webscan.models import Finding, ScanContext, Severity
 
 
@@ -52,9 +52,9 @@ class _FormParser(HTMLParser):
             self._current = None
 
 
-class FormSecurityCheck(Check):
+class FormSecurityCheck(PassiveCheck):
     name = "forms"
-    description = "Анализирует HTML-формы (HTTP-отправка, пароли, CSRF-токены)"
+    description = "Analyses HTML forms (HTTP submission, passwords, CSRF tokens)"
 
     def run(self, ctx: ScanContext) -> list[Finding]:
         if not ctx.base_html:
@@ -66,9 +66,9 @@ class FormSecurityCheck(Check):
         except Exception:  # malformed HTML — bail out quietly
             return []
 
-        page_is_https = (ctx.base_response.url if ctx.base_response else ctx.target).lower().startswith(
-            "https://"
-        )
+        page_is_https = (
+            ctx.base_response.url if ctx.base_response else ctx.target
+        ).lower().startswith("https://")
         findings: list[Finding] = []
 
         for idx, form in enumerate(parser.forms):
@@ -78,11 +78,11 @@ class FormSecurityCheck(Check):
             if _submits_over_http(action_url, page_is_https):
                 findings.append(
                     self.finding(
-                        title=f"Форма отправляет данные по HTTP ({label})",
+                        title=f"Form submits data over HTTP ({label})",
                         severity=Severity.HIGH if form.has_password else Severity.MEDIUM,
-                        description="Данные формы передаются без шифрования.",
-                        evidence=f"action={form.action or '(текущая страница)'}",
-                        remediation="Отправляйте формы только на HTTPS-адреса.",
+                        description="Form data is transmitted without encryption.",
+                        evidence=f"action={form.action or '(current page)'}",
+                        remediation="Submit forms to HTTPS endpoints only.",
                         url=action_url,
                     )
                 )
@@ -91,20 +91,20 @@ class FormSecurityCheck(Check):
                 if not form.has_csrf_token and form.method == "post":
                     findings.append(
                         self.finding(
-                            title=f"Форма с паролем без CSRF-токена ({label})",
+                            title=f"Password form without a CSRF token ({label})",
                             severity=Severity.MEDIUM,
-                            description="Не найдено скрытое поле, похожее на анти-CSRF токен.",
-                            remediation="Добавьте проверяемый на сервере CSRF-токен в форму.",
+                            description="No hidden field resembling an anti-CSRF token was found.",
+                            remediation="Add a server-validated CSRF token to the form.",
                             url=action_url,
                         )
                     )
                 if form.method == "get":
                     findings.append(
                         self.finding(
-                            title=f"Поле пароля отправляется методом GET ({label})",
+                            title=f"Password field submitted via GET ({label})",
                             severity=Severity.HIGH,
-                            description="Пароль попадёт в URL, логи сервера и историю браузера.",
-                            remediation="Используйте метод POST для форм аутентификации.",
+                            description="The password ends up in the URL, server logs and browser history.",
+                            remediation="Use the POST method for authentication forms.",
                             url=action_url,
                         )
                     )

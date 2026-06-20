@@ -1,28 +1,77 @@
-"""Base class every check inherits from."""
+"""Base classes for the two kinds of checks.
+
+* :class:`PassiveCheck` inspects a response the scanner already fetched. It sends
+  no extra payloads and is always safe to run.
+* :class:`ActiveCheck` mutates one parameter of an :class:`InjectionPoint`,
+  sends a benign probe and analyses the response. Active checks detect issues
+  (they never weaponise or escalate them) and only run when the user opts in.
+"""
 
 from __future__ import annotations
 
-from webscan.models import Finding, ScanContext
+from typing import Optional
+
+import requests
+
+from webscan.http_client import HttpClient
+from webscan.models import Finding, InjectionPoint, ScanContext
 
 
-class Check:
-    """A single, self-contained scanning module.
-
-    Subclasses set :attr:`name` / :attr:`description` and implement :meth:`run`,
-    returning a list of :class:`~webscan.models.Finding`. A check should never
-    raise for an expected condition (a closed port, a missing page); the scanner
-    catches unexpected exceptions and records them as scan errors.
-    """
-
-    #: Short, CLI-friendly identifier (e.g. ``"security-headers"``).
+class _FindingFactory:
     name: str = "base"
-    #: One-line human description shown by ``--list-checks``.
-    description: str = ""
+
+    def finding(self, **kwargs) -> Finding:
+        kwargs.setdefault("check", self.name)
+        return Finding(**kwargs)
+
+
+class PassiveCheck(_FindingFactory):
+    """A read-only check over the already-fetched landing page."""
+
+    name = "base"
+    description = ""
 
     def run(self, ctx: ScanContext) -> list[Finding]:  # pragma: no cover - abstract
         raise NotImplementedError
 
-    # Convenience factory so subclasses can write ``self.finding(...)``.
-    def finding(self, **kwargs) -> Finding:
-        kwargs.setdefault("check", self.name)
-        return Finding(**kwargs)
+
+#: Backwards-compatible alias used by the passive checks.
+Check = PassiveCheck
+
+
+class ActiveCheck(_FindingFactory):
+    """A check that probes a single injection point with benign payloads."""
+
+    name = "base"
+    description = ""
+
+    def test(
+        self, point: InjectionPoint, client: HttpClient
+    ) -> list[Finding]:  # pragma: no cover - abstract
+        raise NotImplementedError
+
+    def send(
+        self,
+        client: HttpClient,
+        point: InjectionPoint,
+        payload: str,
+        *,
+        allow_redirects: bool = True,
+    ) -> Optional[requests.Response]:
+        """Send ``payload`` in ``point.param``, keeping other values intact.
+
+        Returns ``None`` on transport errors; budget exhaustion propagates so
+        the scan stops.
+        """
+        values = dict(point.params)
+        values[point.param] = payload
+        try:
+            if point.method == "POST":
+                return client.request(
+                    "POST", point.url, data=values, allow_redirects=allow_redirects
+                )
+            return client.request(
+                "GET", point.url, params=values, allow_redirects=allow_redirects
+            )
+        except requests.RequestException:
+            return None

@@ -1,26 +1,25 @@
 """Probe for a small, well-known set of accidentally exposed files.
 
-This is the only check that makes extra requests, and it stays low-intensity:
-a short, fixed list of common paths fetched once each. It never brute-forces.
+A short, fixed list of common paths fetched once each. It never brute-forces.
 """
 
 from __future__ import annotations
 
 import requests
 
-from webscan.checks.base import Check
+from webscan.checks.base import PassiveCheck
 from webscan.models import Finding, ScanContext, Severity
 
 # path -> (severity, why it matters)
 _PATHS = {
-    "/.git/config": (Severity.HIGH, "Экспонирован репозиторий .git — можно выкачать исходники."),
-    "/.env": (Severity.HIGH, "Файл окружения часто содержит секреты и пароли БД."),
-    "/.svn/entries": (Severity.MEDIUM, "Метаданные SVN раскрывают структуру и историю кода."),
-    "/.DS_Store": (Severity.LOW, "Файл macOS раскрывает имена файлов в директории."),
-    "/backup.zip": (Severity.MEDIUM, "Доступный бэкап может содержать исходники/данные."),
-    "/wp-config.php.bak": (Severity.HIGH, "Бэкап конфигурации WordPress с учётными данными."),
-    "/.htaccess": (Severity.LOW, "Файл конфигурации Apache не должен отдаваться напрямую."),
-    "/server-status": (Severity.MEDIUM, "Apache mod_status раскрывает запросы и внутренние адреса."),
+    "/.git/config": (Severity.HIGH, "Exposed .git repository — the source can be downloaded."),
+    "/.env": (Severity.HIGH, "Environment files often hold secrets and DB credentials."),
+    "/.svn/entries": (Severity.MEDIUM, "SVN metadata leaks the code structure and history."),
+    "/.DS_Store": (Severity.LOW, "macOS file leaks the names of files in the directory."),
+    "/backup.zip": (Severity.MEDIUM, "A reachable backup may contain source code or data."),
+    "/wp-config.php.bak": (Severity.HIGH, "WordPress config backup with credentials."),
+    "/.htaccess": (Severity.LOW, "Apache config file should not be served directly."),
+    "/server-status": (Severity.MEDIUM, "Apache mod_status leaks requests and internal addresses."),
 }
 
 # A body that looks like real content rather than a custom 200-styled 404.
@@ -28,9 +27,9 @@ _GIT_MARKER = "[core]"
 _ENV_MARKERS = ("=", "\n")
 
 
-class SensitiveFilesCheck(Check):
+class SensitiveFilesCheck(PassiveCheck):
     name = "sensitive-files"
-    description = "Проверяет доступность типичных чувствительных файлов (.git, .env, бэкапы)"
+    description = "Checks for exposed sensitive files (.git, .env, backups)"
 
     def run(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -43,11 +42,11 @@ class SensitiveFilesCheck(Check):
                 continue
             findings.append(
                 self.finding(
-                    title=f"Доступен чувствительный путь: {path}",
+                    title=f"Sensitive path is reachable: {path}",
                     severity=severity,
                     description=why,
-                    evidence=f"HTTP 200 на {url} ({len(resp.content)} байт)",
-                    remediation="Закройте доступ к файлу/директории на уровне веб-сервера или удалите его.",
+                    evidence=f"HTTP 200 at {url} ({len(resp.content)} bytes)",
+                    remediation="Block access to the file/directory at the web server, or remove it.",
                     url=url,
                 )
             )
@@ -64,11 +63,11 @@ class SensitiveFilesCheck(Check):
         if "index of /" in body and "<title>index of" in body:
             return [
                 self.finding(
-                    title="Включён листинг директорий",
+                    title="Directory listing is enabled",
                     severity=Severity.MEDIUM,
-                    description="Сервер показывает содержимое директории вместо страницы.",
-                    evidence="Найден маркер 'Index of /'",
-                    remediation="Отключите автоиндекс (Options -Indexes в Apache, autoindex off в nginx).",
+                    description="The server shows directory contents instead of a page.",
+                    evidence="Found an 'Index of /' marker",
+                    remediation="Disable auto-indexing (Options -Indexes in Apache, autoindex off in nginx).",
                     url=resp.url,
                 )
             ]

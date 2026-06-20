@@ -9,38 +9,37 @@ from webscan.models import Finding, ScanContext, Severity
 _EXPECTED_HEADERS = {
     "content-security-policy": (
         Severity.MEDIUM,
-        "Отсутствует Content-Security-Policy (CSP)",
-        "Задайте политику CSP, ограничивающую источники скриптов/стилей, "
-        "чтобы снизить риск XSS и инъекций.",
+        "Missing Content-Security-Policy (CSP) header",
+        "Define a CSP that restricts script/style sources to reduce the risk of "
+        "XSS and injection.",
     ),
     "strict-transport-security": (
         Severity.HIGH,
-        "Отсутствует Strict-Transport-Security (HSTS)",
-        "Добавьте заголовок HSTS на HTTPS-ответы, например "
+        "Missing Strict-Transport-Security (HSTS) header",
+        "Add an HSTS header to HTTPS responses, e.g. "
         "'max-age=31536000; includeSubDomains'.",
     ),
     "x-content-type-options": (
         Severity.LOW,
-        "Отсутствует X-Content-Type-Options",
-        "Установите 'X-Content-Type-Options: nosniff', чтобы запретить браузеру "
-        "угадывать MIME-тип.",
+        "Missing X-Content-Type-Options header",
+        "Set 'X-Content-Type-Options: nosniff' to stop the browser from MIME-sniffing.",
     ),
     "x-frame-options": (
         Severity.MEDIUM,
-        "Отсутствует защита от clickjacking (X-Frame-Options / CSP frame-ancestors)",
-        "Задайте 'X-Frame-Options: DENY' или директиву CSP 'frame-ancestors'.",
+        "Missing clickjacking protection (X-Frame-Options / CSP frame-ancestors)",
+        "Set 'X-Frame-Options: DENY' or a CSP 'frame-ancestors' directive.",
     ),
     "referrer-policy": (
         Severity.LOW,
-        "Отсутствует Referrer-Policy",
-        "Установите 'Referrer-Policy: strict-origin-when-cross-origin' или строже.",
+        "Missing Referrer-Policy header",
+        "Set 'Referrer-Policy: strict-origin-when-cross-origin' or stricter.",
     ),
 }
 
 
 class SecurityHeadersCheck(Check):
     name = "security-headers"
-    description = "Проверяет наличие HTTP-заголовков безопасности (CSP, HSTS, ...)"
+    description = "Checks for HTTP security headers (CSP, HSTS, ...)"
 
     def run(self, ctx: ScanContext) -> list[Finding]:
         resp = ctx.base_response
@@ -66,7 +65,7 @@ class SecurityHeadersCheck(Check):
                 self.finding(
                     title=title,
                     severity=severity,
-                    description=f"Ответ не содержит заголовок '{header}'.",
+                    description=f"The response does not set the '{header}' header.",
                     remediation=remediation,
                     url=resp.url,
                 )
@@ -83,11 +82,11 @@ class SecurityHeadersCheck(Check):
             if max_age is not None and max_age < 15552000:  # < 180 days
                 out.append(
                     self.finding(
-                        title="Слишком короткий max-age у HSTS",
+                        title="HSTS max-age is too short",
                         severity=Severity.LOW,
-                        description=f"HSTS max-age={max_age} меньше рекомендуемых 6 месяцев.",
+                        description=f"HSTS max-age={max_age} is below the recommended 6 months.",
                         evidence=hsts,
-                        remediation="Увеличьте max-age минимум до 15552000 (180 дней).",
+                        remediation="Increase max-age to at least 15552000 (180 days).",
                         url=url,
                     )
                 )

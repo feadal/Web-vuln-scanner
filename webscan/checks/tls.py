@@ -6,13 +6,13 @@ from urllib.parse import urlparse, urlunparse
 
 import requests
 
-from webscan.checks.base import Check
+from webscan.checks.base import PassiveCheck
 from webscan.models import Finding, ScanContext, Severity
 
 
-class TlsCheck(Check):
+class TlsCheck(PassiveCheck):
     name = "tls"
-    description = "Проверяет HTTPS, редирект с HTTP и валидность сертификата"
+    description = "Checks HTTPS usage, HTTP redirect and certificate validity"
 
     def run(self, ctx: ScanContext) -> list[Finding]:
         resp = ctx.base_response
@@ -25,11 +25,11 @@ class TlsCheck(Check):
         if not final_is_https:
             findings.append(
                 self.finding(
-                    title="Сайт обслуживается по незашифрованному HTTP",
+                    title="Site is served over unencrypted HTTP",
                     severity=Severity.HIGH,
-                    description="Трафик передаётся открытым текстом и может быть перехвачен/изменён.",
+                    description="Traffic is sent in clear text and can be intercepted or modified.",
                     evidence=resp.url,
-                    remediation="Включите HTTPS и принудительный редирект всего трафика на него.",
+                    remediation="Enable HTTPS and force a redirect of all traffic to it.",
                     url=resp.url,
                 )
             )
@@ -40,9 +40,9 @@ class TlsCheck(Check):
         if not ctx.client.verify_tls:
             findings.append(
                 self.finding(
-                    title="Проверка TLS-сертификата отключена (--insecure)",
+                    title="TLS certificate verification was disabled (--insecure)",
                     severity=Severity.INFO,
-                    description="Сканирование выполнено без валидации сертификата.",
+                    description="The scan ran without validating the certificate.",
                     url=resp.url,
                 )
             )
@@ -58,11 +58,11 @@ class TlsCheck(Check):
         if probe is None:
             return [
                 self.finding(
-                    title="HTTPS-эндпоинт недоступен",
+                    title="No HTTPS endpoint available",
                     severity=Severity.MEDIUM,
-                    description="Подключение по HTTPS не удалось — шифрование, вероятно, не настроено.",
+                    description="Connecting over HTTPS failed — encryption is likely not configured.",
                     evidence=https_url,
-                    remediation="Разверните валидный TLS-сертификат и слушайте порт 443.",
+                    remediation="Deploy a valid TLS certificate and listen on port 443.",
                     url=https_url,
                 )
             ]
@@ -75,11 +75,11 @@ class TlsCheck(Check):
         except requests.exceptions.SSLError as exc:
             return [
                 self.finding(
-                    title="Невалидный TLS-сертификат",
+                    title="Invalid TLS certificate",
                     severity=Severity.HIGH,
-                    description="Сертификат не прошёл проверку доверия (истёк, самоподписан или не тот хост).",
+                    description="The certificate failed validation (expired, self-signed or wrong host).",
                     evidence=str(exc)[:200],
-                    remediation="Установите валидный сертификат от доверенного УЦ.",
+                    remediation="Install a valid certificate from a trusted CA.",
                     url=url,
                 )
             ]

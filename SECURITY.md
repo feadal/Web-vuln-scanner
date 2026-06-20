@@ -1,25 +1,32 @@
-# Политика безопасности и ответственного использования
+# Security & Responsible Use Policy
 
-## Допустимое использование
+## Acceptable use
 
-`webscan` предназначен **исключительно** для:
+webscan is an **active** scanner: it sends probes to the target. Use it **only** for:
 
-- тестирования систем, которыми вы владеете;
-- тестирования в рамках официального договора на пентест с письменным разрешением (scope);
-- участия в легальных CTF и тренировочных лабораториях (DVWA, Juice Shop, HackTheBox и т. п.);
-- обучения и исследований в контролируемой среде.
+- testing systems you own;
+- engagements with a signed penetration-testing contract and written scope;
+- legal CTFs and training labs (DVWA, Juice Shop, the bundled `examples/vulnerable_app.py`, etc.);
+- education and research in a controlled environment.
 
-## Недопустимое использование
+## Unacceptable use
 
-Запрещено применять инструмент против любых систем без явного разрешения владельца.
-Несанкционированное сканирование может нарушать законы (CFAA в США, Computer Misuse Act
-в Великобритании, ст. 272–274 УК РФ и аналоги) и условия хостинг-провайдеров.
+Do not run it against any system without the owner's explicit permission.
+Unauthorized scanning may violate the law (CFAA in the US, the Computer Misuse Act
+in the UK, and equivalents elsewhere) and your hosting provider's terms. All
+responsibility for use of this tool rests with the user; the authors accept none.
 
-Авторы и контрибьюторы не несут ответственности за ущерб, вызванный неправомерным
-использованием. Ответственность полностью лежит на пользователе.
+## Design choices that keep it a good citizen
 
-## Сообщить об уязвимости в самом webscan
+- **Detection, not exploitation.** Probes confirm a bug (an error, a reflection,
+  reading `/etc/passwd`, echoing an arithmetic result) — they never dump data,
+  escalate privileges, or run harmful commands.
+- **Bounded by default.** Same-host crawl scope, a hard request budget, optional
+  throttling and a limited crawl depth prevent a scan from becoming a flood.
+- **Honest output.** Heuristic findings are marked `tentative` so a human verifies
+  them before acting.
 
-Если вы нашли уязвимость в коде проекта, пожалуйста, не открывайте публичный issue.
-Напишите мейнтейнерам через приватный security advisory на GitHub. Мы постараемся
-ответить в течение 7 дней.
+## Reporting a vulnerability in webscan itself
+
+Please do not open a public issue. Use a private GitHub security advisory to
+contact the maintainers. We aim to respond within 7 days.
