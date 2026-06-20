@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "webscan"
+version = "0.1.0"
+description = "A lightweight passive web vulnerability scanner for authorized security testing"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "webscan contributors" }]
+keywords = ["security", "pentest", "scanner", "web", "vulnerability", "appsec"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+dependencies = [
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "responses>=0.23",
+    "ruff>=0.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/webscan"
+Issues = "https://github.com/your-org/webscan/issues"
+
+[project.scripts]
+webscan = "webscan.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["webscan*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
