@@ -43,6 +43,7 @@ class ActiveCheck(_FindingFactory):
 
     name = "base"
     description = ""
+    tamper: list = []
 
     def test(
         self, point: InjectionPoint, client: HttpClient

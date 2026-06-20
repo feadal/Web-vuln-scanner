@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from webscan import tamper as tamper_mod
 from webscan.checks.base import ActiveCheck
 from webscan.http_client import HttpClient
 from webscan.models import Finding, InjectionPoint, Severity
@@ -10,6 +11,7 @@ from webscan.payloads import (
     SQLI_FALSE_PAYLOAD,
     SQLI_TRUE_PAYLOAD,
     match_sql_error,
+    sql_db_fingerprint,
     sqli_time_payloads,
     time_based_triggered,
 )
@@ -32,14 +34,19 @@ class SqlInjectionCheck(ActiveCheck):
         return [boolean] if boolean else []
 
     def _error_based(self, point, client) -> Finding | None:
-        for payload in SQLI_ERROR_PAYLOADS:
+        payloads = list(SQLI_ERROR_PAYLOADS)
+        if self.tamper:
+            payloads += [tamper_mod.chain(self.tamper, p) for p in SQLI_ERROR_PAYLOADS]
+        for payload in payloads:
             resp = self.send(client, point, payload)
             if resp is None:
                 continue
             fragment = match_sql_error(resp.text or "")
             if fragment:
+                db = sql_db_fingerprint(resp.text or "")
+                title = f"Error-based SQL injection ({db})" if db else "Error-based SQL injection"
                 return self.finding(
-                    title="Error-based SQL injection",
+                    title=title,
                     severity=Severity.HIGH,
                     confidence="firm",
                     description="A crafted quote produced a database error, indicating unsanitised input.",

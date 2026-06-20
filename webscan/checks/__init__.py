@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from webscan.checks.active.command_injection import CommandInjectionCheck
 from webscan.checks.active.crlf import CrlfCheck
+from webscan.checks.active.hpp import HppCheck
+from webscan.checks.active.idor import IdorCheck
 from webscan.checks.active.lfi import LfiCheck
+from webscan.checks.active.mass_assignment import MassAssignmentCheck
 from webscan.checks.active.nosqli import NoSqlInjectionCheck
 from webscan.checks.active.open_redirect import OpenRedirectCheck
 from webscan.checks.active.path_traversal import PathTraversalCheck
@@ -18,13 +21,18 @@ from webscan.checks.cookies import CookieFlagsCheck
 from webscan.checks.cors import CorsCheck
 from webscan.checks.forced_browsing import ForcedBrowsingCheck
 from webscan.checks.forms import FormSecurityCheck
+from webscan.checks.graphql_introspection import GraphqlIntrospectionCheck
 from webscan.checks.host_header import HostHeaderCheck
 from webscan.checks.http_methods import HttpMethodsCheck
 from webscan.checks.jwt import JwtCheck
+from webscan.checks.secrets import SecretsCheck
 from webscan.checks.security_headers import SecurityHeadersCheck
 from webscan.checks.sensitive_files import SensitiveFilesCheck
 from webscan.checks.server_disclosure import ServerDisclosureCheck
 from webscan.checks.tls import TlsCheck
+from webscan.checks.waf import WafCheck
+from webscan.checks.web_cache_deception import WebCacheDeceptionCheck
+from webscan.checks.web_cache_poisoning import WebCachePoisoningCheck
 
 PASSIVE_CHECKS: list[type[PassiveCheck]] = [
     SecurityHeadersCheck,
@@ -38,6 +46,11 @@ PASSIVE_CHECKS: list[type[PassiveCheck]] = [
     HttpMethodsCheck,
     JwtCheck,
     ForcedBrowsingCheck,
+    GraphqlIntrospectionCheck,
+    SecretsCheck,
+    WafCheck,
+    WebCacheDeceptionCheck,
+    WebCachePoisoningCheck,
 ]
 
 ACTIVE_CHECKS: list[type[ActiveCheck]] = [
@@ -50,6 +63,9 @@ ACTIVE_CHECKS: list[type[ActiveCheck]] = [
     SsrfCheck,
     XxeCheck,
     CrlfCheck,
+    HppCheck,
+    MassAssignmentCheck,
+    IdorCheck,
     PathTraversalCheck,
     OpenRedirectCheck,
 ]

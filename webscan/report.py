@@ -1,4 +1,4 @@
-"""Render a ScanResult as text, JSON or HTML."""
+"""Render a ScanResult as text, JSON, HTML or SARIF."""
 
 from __future__ import annotations
 
@@ -22,6 +22,20 @@ _HTML_COLORS = {
     Severity.MEDIUM: "#d98c1f",
     Severity.LOW: "#2f7fb5",
     Severity.INFO: "#888",
+}
+
+_SARIF_LEVEL = {
+    Severity.HIGH: "error",
+    Severity.MEDIUM: "warning",
+    Severity.LOW: "note",
+    Severity.INFO: "note",
+}
+
+_SECURITY_SEVERITY = {
+    Severity.HIGH: "8.0",
+    Severity.MEDIUM: "5.0",
+    Severity.LOW: "3.0",
+    Severity.INFO: "0.0",
 }
 
 
@@ -50,8 +64,9 @@ def render_text(result: ScanResult, *, color: bool | None = None) -> str:
             if color:
                 tag = _COLORS[f.severity] + tag + _RESET
             suffix = "  (tentative)" if f.confidence == "tentative" else ""
+            cwe = f"  {f.cwe}" if f.cwe else ""
             where = f"  →  param '{f.param}'" if f.param else ""
-            lines.append(f"{tag} {f.check.ljust(17)} {f.title}{suffix}")
+            lines.append(f"{tag} {f.check.ljust(17)} {f.title}{suffix}{cwe}")
             if f.evidence:
                 lines.append(f"          ↳ {f.evidence}{where}")
             elif where:
@@ -79,6 +94,8 @@ def render_html(result: ScanResult) -> str:
             f'<td><span style="color:{color};font-weight:600">{f.severity.value.upper()}</span></td>'
             f"<td>{html.escape(f.check)}</td>"
             f"<td>{html.escape(f.title)}{conf}</td>"
+            f"<td>{html.escape(f.owasp)}</td>"
+            f"<td>{html.escape(f.cwe)}</td>"
             f"<td>{html.escape(f.param)}</td>"
             f"<td><code>{html.escape(f.evidence)}</code></td>"
             "</tr>"
@@ -94,17 +111,60 @@ def render_html(result: ScanResult) -> str:
         f"<title>webscan report — {html.escape(result.target)}</title>"
         "<style>body{font-family:system-ui,sans-serif;margin:2rem;color:#222}"
         "table{border-collapse:collapse;width:100%}"
-        "th,td{border:1px solid #ddd;padding:6px 10px;text-align:left;font-size:14px;vertical-align:top}"
+        "th,td{border:1px solid #ddd;padding:6px 10px;text-align:left;font-size:13px;vertical-align:top}"
         "th{background:#f4f4f4}code{font-size:12px;word-break:break-all}</style></head><body>"
         f"<h1>webscan {__version__}</h1>"
         f"<p>Target: <strong>{html.escape(result.target)}</strong><br>"
         f"Injection points: {result.injection_points} · Requests: {result.requests_made}<br>"
         f"Findings: {summary or '0'}</p>"
         "<table><thead><tr><th>Severity</th><th>Check</th><th>Title</th>"
-        "<th>Param</th><th>Evidence</th></tr></thead><tbody>"
+        "<th>OWASP</th><th>CWE</th><th>Param</th><th>Evidence</th></tr></thead><tbody>"
         + "".join(rows)
         + "</tbody></table></body></html>"
     )
+
+
+def render_sarif(result: ScanResult) -> str:
+    findings = result.sorted_findings()
+    rule_ids = sorted({f.check for f in findings})
+    rules = [{"id": rid, "name": rid, "shortDescription": {"text": rid}} for rid in rule_ids]
+    results = []
+    for f in findings:
+        props = {"security-severity": _SECURITY_SEVERITY[f.severity], "confidence": f.confidence}
+        tags = [t for t in (f.cwe, f.owasp) if t]
+        if f.mitre:
+            tags.extend(m.strip() for m in f.mitre.split(",") if m.strip())
+        if tags:
+            props["tags"] = tags
+        results.append(
+            {
+                "ruleId": f.check,
+                "level": _SARIF_LEVEL[f.severity],
+                "message": {"text": f"{f.title}. {f.evidence}".strip()},
+                "locations": [
+                    {"physicalLocation": {"artifactLocation": {"uri": f.url or result.target}}}
+                ],
+                "properties": props,
+            }
+        )
+    doc = {
+        "version": "2.1.0",
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "webscan",
+                        "version": __version__,
+                        "informationUri": "https://github.com/feadal/Web-vuln-scanner",
+                        "rules": rules,
+                    }
+                },
+                "results": results,
+            }
+        ],
+    }
+    return json.dumps(doc, ensure_ascii=False, indent=2)
 
 
 def _summary_line(result: ScanResult) -> str:

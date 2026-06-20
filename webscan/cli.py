@@ -7,11 +7,12 @@ import logging
 import sys
 from typing import Optional, Sequence
 
-from webscan import __version__
+from webscan import __version__, nuclei
 from webscan.checks import all_active, all_names, all_passive, select
 from webscan.http_client import HttpClient
 from webscan.models import Severity
-from webscan.report import render_html, render_json, render_text
+from webscan.progress import NullReporter, Reporter
+from webscan.report import render_html, render_json, render_sarif, render_text
 from webscan.scanner import Scanner
 
 _BANNER = (
@@ -27,14 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=_BANNER,
     )
     parser.add_argument("target", nargs="?", help="Target URL or host, e.g. https://example.com")
+    parser.add_argument("--checks", help="Comma-separated checks to run (default: all)")
     parser.add_argument(
-        "--checks",
-        help="Comma-separated checks to run (default: all). See --list-checks.",
-    )
-    parser.add_argument(
-        "--passive-only",
-        action="store_true",
-        help="Run only passive checks; send no active probes",
+        "--passive-only", action="store_true", help="Run only passive checks; send no active probes"
     )
     parser.add_argument(
         "--list-checks", action="store_true", help="List available checks and exit"
@@ -48,10 +44,40 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also probe common parameter names (page, file, url, id, ...)",
     )
     parser.add_argument(
-        "--max-requests",
-        type=int,
-        default=1000,
-        help="Hard cap on total HTTP requests for the scan (default 1000)",
+        "--threads", type=int, default=10, help="Concurrent workers for the active pass (default 10)"
+    )
+    parser.add_argument(
+        "--browser",
+        action="store_true",
+        help="Use a headless browser to crawl SPA/JS apps (needs the 'browser' extra)",
+    )
+    parser.add_argument(
+        "--oob",
+        action="store_true",
+        help="Detect blind vulns out-of-band via a built-in HTTP collaborator",
+    )
+    parser.add_argument(
+        "--oob-host",
+        default="127.0.0.1",
+        help="Advertised collaborator host the target can reach (your public IP/forward)",
+    )
+    parser.add_argument("--oob-port", type=int, default=0, help="Collaborator port (default: random)")
+    parser.add_argument(
+        "--oob-wait", type=float, default=5.0, help="Seconds to wait for OOB callbacks (default 5)"
+    )
+    parser.add_argument(
+        "--max-requests", type=int, default=1000, help="Hard cap on total HTTP requests (default 1000)"
+    )
+    parser.add_argument(
+        "--nuclei", action="store_true", help="Also run nuclei (if installed) and merge findings"
+    )
+    parser.add_argument(
+        "--templates",
+        nargs="?",
+        const="__builtin__",
+        default=None,
+        metavar="DIR",
+        help="Run YAML detection templates from DIR (bundled ones if no DIR; needs 'templates' extra)",
     )
     parser.add_argument(
         "--min-severity",
@@ -59,18 +85,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Only report findings at or above this severity",
     )
     parser.add_argument(
-        "--cookie",
-        help="Send a cookie header, e.g. 'session=abc; role=admin' (scan behind login)",
+        "--tamper",
+        help="WAF-evasion transforms applied to SQLi probes, e.g. 'url,randomcase' (url, double-url, space2comment, space2tab, randomcase)",
     )
+    parser.add_argument("--cookie", help="Send a cookie header, e.g. 'session=abc; role=admin'")
     parser.add_argument(
-        "--header",
-        action="append",
-        default=[],
-        help="Add a request header 'Name: value' (repeatable)",
+        "--header", action="append", default=[], help="Add a request header 'Name: value' (repeatable)"
     )
     parser.add_argument(
         "--format",
-        choices=["text", "json", "html"],
+        choices=["text", "json", "html", "sarif"],
         default="text",
         help="Output format (default text)",
     )
@@ -82,10 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--delay", type=float, default=0.0, help="Delay between requests in seconds (politeness)"
     )
     parser.add_argument(
-        "--insecure",
-        "-k",
-        action="store_true",
-        help="Do not verify the TLS certificate (for lab self-signed certs)",
+        "--insecure", "-k", action="store_true", help="Do not verify the TLS certificate"
     )
     parser.add_argument(
         "--fail-on",
@@ -93,6 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="medium",
         help="Minimum severity that makes the exit code 1 (default medium)",
     )
+    parser.add_argument("--quiet", "-q", action="store_true", help="Suppress live progress output")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose logging")
     parser.add_argument("--version", action="version", version=f"webscan {__version__}")
     return parser
@@ -166,6 +188,31 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         headers=_parse_headers(args.header),
         cookies=_parse_cookies(args.cookie),
     )
+    templates = None
+    if args.templates is not None:
+        from webscan import templates_engine
+
+        if not templates_engine.available():
+            print(
+                'pyyaml not installed; --templates skipped (pip install -e ".[templates]")',
+                file=sys.stderr,
+            )
+        else:
+            path = None if args.templates == "__builtin__" else args.templates
+            templates = templates_engine.load_templates(path)
+            print(f"loaded {len(templates)} template(s)", file=sys.stderr)
+
+    collaborator = None
+    if args.oob:
+        from webscan.collaborator import HttpCollaborator
+
+        collaborator = HttpCollaborator(advertised_host=args.oob_host, port=args.oob_port)
+        collaborator.start()
+        print(
+            f"OOB collaborator on {collaborator.advertised} — the target must be able to reach it",
+            file=sys.stderr,
+        )
+
     scanner = Scanner(
         client=client,
         passive_checks=passive,
@@ -173,12 +220,25 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         active=bool(active),
         max_pages=args.max_pages,
         guess_params=args.guess_params,
+        threads=args.threads,
+        browser=args.browser,
+        oob=args.oob,
+        collaborator=collaborator,
+        oob_wait=args.oob_wait,
+        templates=templates,
+        tamper=_split(args.tamper) if args.tamper else None,
+        reporter=NullReporter() if args.quiet else Reporter(),
     )
 
     try:
         result = scanner.scan(args.target)
     finally:
         client.close()
+        if collaborator is not None:
+            collaborator.stop()
+
+    if args.nuclei:
+        _run_nuclei(result)
 
     if args.min_severity:
         threshold = Severity(args.min_severity)
@@ -195,11 +255,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     return _exit_code(result, args.fail_on)
 
 
+def _run_nuclei(result) -> None:
+    if not nuclei.available():
+        result.errors.append("nuclei not found on PATH; skipped --nuclei")
+        return
+    try:
+        for finding in nuclei.run(result.target):
+            result.add(finding)
+    except Exception as exc:
+        result.errors.append(f"nuclei: {exc}")
+
+
 def _render(result, fmt: str) -> str:
     if fmt == "json":
         return render_json(result)
     if fmt == "html":
         return render_html(result)
+    if fmt == "sarif":
+        return render_sarif(result)
     return render_text(result)
 
 

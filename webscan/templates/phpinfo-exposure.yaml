@@ -1,0 +1,21 @@
+id: phpinfo-exposure
+info:
+  name: phpinfo() page exposed
+  severity: medium
+  cwe: CWE-200
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/phpinfo.php"
+      - "{{BaseURL}}/info.php"
+      - "{{BaseURL}}/test.php"
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: body
+        condition: and
+        words:
+          - "PHP Version"
+          - "Configuration"

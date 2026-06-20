@@ -1,0 +1,22 @@
+id: spring-actuator-exposed
+info:
+  name: Spring Boot Actuator exposed
+  severity: high
+  cwe: CWE-200
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/actuator"
+      - "{{BaseURL}}/actuator/env"
+      - "{{BaseURL}}/actuator/health"
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: word
+        part: body
+        condition: or
+        words:
+          - "\"_links\""
+          - "\"status\":\"UP\""
+          - "\"propertySources\""

@@ -28,6 +28,13 @@ dev = [
     "pytest>=7.0",
     "responses>=0.23",
     "ruff>=0.1",
+    "pyyaml>=6.0",
+]
+browser = [
+    "playwright>=1.40",
+]
+templates = [
+    "pyyaml>=6.0",
 ]
 
 [project.urls]
@@ -40,6 +47,9 @@ webscan = "webscan.cli:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["webscan*"]
+
+[tool.setuptools.package-data]
+webscan = ["templates/*.yaml"]
 
 [tool.ruff]
 line-length = 100

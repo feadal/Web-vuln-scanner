@@ -1,7 +1,8 @@
-"""A thin, polite wrapper around requests with a hard request budget."""
+"""A thin, polite, thread-safe wrapper around requests with a request budget."""
 
 from __future__ import annotations
 
+import threading
 import time
 from typing import Optional
 from urllib.parse import urljoin
@@ -36,6 +37,7 @@ class HttpClient:
         self.max_requests = max_requests
         self.requests_made = 0
         self._last_request_at = 0.0
+        self._lock = threading.Lock()
         self.session = requests.Session()
         self.session.max_redirects = max_redirects
         self.session.headers.update({"User-Agent": user_agent})
@@ -44,25 +46,23 @@ class HttpClient:
         if cookies:
             self.session.cookies.update(cookies)
 
-    def _throttle(self) -> None:
-        if self.delay <= 0:
-            return
-        elapsed = time.monotonic() - self._last_request_at
-        if elapsed < self.delay:
-            time.sleep(self.delay - elapsed)
+    def _reserve(self) -> None:
+        with self._lock:
+            if self.requests_made >= self.max_requests:
+                raise BudgetExceeded(f"reached request budget of {self.max_requests}")
+            self.requests_made += 1
+            if self.delay > 0:
+                wait = self.delay - (time.monotonic() - self._last_request_at)
+                if wait > 0:
+                    time.sleep(wait)
+            self._last_request_at = time.monotonic()
 
     def request(self, method: str, url: str, **kwargs) -> requests.Response:
-        if self.requests_made >= self.max_requests:
-            raise BudgetExceeded(f"reached request budget of {self.max_requests}")
-        self._throttle()
+        self._reserve()
         kwargs.setdefault("timeout", self.timeout)
         kwargs.setdefault("verify", self.verify_tls)
         kwargs.setdefault("allow_redirects", True)
-        self.requests_made += 1
-        try:
-            return self.session.request(method, url, **kwargs)
-        finally:
-            self._last_request_at = time.monotonic()
+        return self.session.request(method, url, **kwargs)
 
     def get(self, url: str, **kwargs) -> requests.Response:
         return self.request("GET", url, **kwargs)

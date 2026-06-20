@@ -10,7 +10,7 @@ from __future__ import annotations
 from webscan.checks.base import ActiveCheck
 from webscan.http_client import HttpClient
 from webscan.models import Finding, InjectionPoint, Severity
-from webscan.payloads import TRAVERSAL_PAYLOADS, match_passwd
+from webscan.payloads import TRAVERSAL_PAYLOADS, match_traversal
 
 
 class PathTraversalCheck(ActiveCheck):
@@ -22,7 +22,7 @@ class PathTraversalCheck(ActiveCheck):
             resp = self.send(client, point, payload)
             if resp is None:
                 continue
-            hit = match_passwd(resp.text or "")
+            hit = match_traversal(resp.text or "")
             if hit:
                 return [
                     self.finding(

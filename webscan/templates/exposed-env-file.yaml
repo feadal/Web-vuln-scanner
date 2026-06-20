@@ -1,0 +1,22 @@
+id: exposed-env-file
+info:
+  name: Exposed .env configuration file
+  severity: high
+  cwe: CWE-200
+requests:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.env"
+      - "{{BaseURL}}/.env.local"
+      - "{{BaseURL}}/.env.production"
+    matchers-condition: and
+    matchers:
+      - type: status
+        status: [200]
+      - type: regex
+        part: body
+        condition: or
+        regex:
+          - "(?m)^[A-Z0-9_]+_(KEY|SECRET|PASSWORD|TOKEN)="
+          - "DB_PASSWORD="
+          - "APP_KEY="
