@@ -34,9 +34,11 @@ this tool; the authors are not. See [SECURITY.md](SECURITY.md).
 | Check | Detects | Technique |
 |---|---|---|
 | `xss` | Reflected cross-site scripting | Unique token in HTML metachars, checks for un-encoded reflection |
-| `sqli` | SQL injection | Error-based (DB error signatures) + boolean differential |
+| `sqli` | SQL injection | Error-based + boolean differential + time-based blind (`SLEEP`/`pg_sleep`/`WAITFOR`) |
 | `cmd-injection` | OS command injection | Arithmetic-echo probe (`$((A*B))`) — shell prints a product not in the payload |
-| `path-traversal` | Path traversal / LFI | `../`-style payloads, confirms via `/etc/passwd` readback |
+| `ssti` | Server-side template injection | Template math (`{{A*B}}`, `${A*B}`, ...), often a path to RCE |
+| `lfi` | Local file inclusion | `php://filter` base64 wrapper confirms PHP source disclosure |
+| `path-traversal` | Path traversal | `../`-style payloads, confirms via `/etc/passwd` readback |
 | `open-redirect` | Open redirect | Benign external host in redirect params, inspects `Location` |
 
 ### Passive checks (always safe)
@@ -73,6 +75,9 @@ webscan https://example.com --passive-only
 
 # Pick specific checks
 webscan https://example.com --checks xss,sqli,security-headers
+
+# Critical findings only (hide medium/low noise)
+webscan https://example.com --min-severity high
 
 # Tune scope / politeness
 webscan https://example.com --max-pages 20 --max-requests 500 --delay 0.2

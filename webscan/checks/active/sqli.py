@@ -1,10 +1,4 @@
-"""SQL injection detection (error-based, plus a boolean differential).
-
-Error-based: a single quote often breaks an unparameterised query and leaks a
-database error message — a firm signal. Boolean-based: a TRUE vs FALSE payload
-pair that changes the response in opposite directions is a tentative signal a
-human should confirm. Neither payload reads, writes or destroys data.
-"""
+"""SQL injection detection: error-based, boolean differential, and time-based blind."""
 
 from __future__ import annotations
 
@@ -16,17 +10,24 @@ from webscan.payloads import (
     SQLI_FALSE_PAYLOAD,
     SQLI_TRUE_PAYLOAD,
     match_sql_error,
+    sqli_time_payloads,
+    time_based_triggered,
 )
+
+_SLEEP = 3
 
 
 class SqlInjectionCheck(ActiveCheck):
     name = "sqli"
-    description = "Detects SQL injection (database errors + boolean differential)"
+    description = "Detects SQL injection (errors, boolean differential, time-based blind)"
 
     def test(self, point: InjectionPoint, client: HttpClient) -> list[Finding]:
         error = self._error_based(point, client)
         if error:
             return [error]
+        timed = self._time_based(point, client)
+        if timed:
+            return [timed]
         boolean = self._boolean_based(point, client)
         return [boolean] if boolean else []
 
@@ -47,6 +48,32 @@ class SqlInjectionCheck(ActiveCheck):
                     url=point.url,
                     param=point.param,
                 )
+        return None
+
+    def _time_based(self, point, client) -> Finding | None:
+        baseline = self.send(client, point, point.params.get(point.param, "1"))
+        if baseline is None:
+            return None
+        base_t = baseline.elapsed.total_seconds()
+        for payload in sqli_time_payloads(_SLEEP):
+            resp = self.send(client, point, payload)
+            if resp is None:
+                continue
+            if time_based_triggered(base_t, resp.elapsed.total_seconds(), _SLEEP):
+                confirm = self.send(client, point, payload)
+                if confirm is not None and time_based_triggered(
+                    base_t, confirm.elapsed.total_seconds(), _SLEEP
+                ):
+                    return self.finding(
+                        title="Time-based blind SQL injection",
+                        severity=Severity.HIGH,
+                        confidence="firm",
+                        description="A sleep payload reproducibly delayed the response.",
+                        evidence=f"~{_SLEEP}s delay on '{point.param}' with {payload}",
+                        remediation="Use parameterised queries / prepared statements.",
+                        url=point.url,
+                        param=point.param,
+                    )
         return None
 
     def _boolean_based(self, point, client) -> Finding | None:

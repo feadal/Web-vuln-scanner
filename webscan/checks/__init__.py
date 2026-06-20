@@ -1,15 +1,13 @@
-"""Registry of all available checks (passive and active).
-
-To add a check: implement a :class:`PassiveCheck` or :class:`ActiveCheck`
-subclass and add it to the matching list below.
-"""
+"""Registry of all available checks (passive and active)."""
 
 from __future__ import annotations
 
 from webscan.checks.active.command_injection import CommandInjectionCheck
+from webscan.checks.active.lfi import LfiCheck
 from webscan.checks.active.open_redirect import OpenRedirectCheck
 from webscan.checks.active.path_traversal import PathTraversalCheck
 from webscan.checks.active.sqli import SqlInjectionCheck
+from webscan.checks.active.ssti import SstiCheck
 from webscan.checks.active.xss import ReflectedXssCheck
 from webscan.checks.base import ActiveCheck, PassiveCheck
 from webscan.checks.cookies import CookieFlagsCheck
@@ -33,6 +31,8 @@ ACTIVE_CHECKS: list[type[ActiveCheck]] = [
     SqlInjectionCheck,
     CommandInjectionCheck,
     PathTraversalCheck,
+    LfiCheck,
+    SstiCheck,
     OpenRedirectCheck,
 ]
 
@@ -61,10 +61,6 @@ def all_names() -> list[str]:
 
 
 def select(names: list[str]) -> tuple[list[PassiveCheck], list[ActiveCheck]]:
-    """Instantiate the named checks, split into (passive, active).
-
-    Raises :class:`KeyError` naming the unknown check(s) if any are unregistered.
-    """
     wanted = set(names)
     unknown = wanted - set(_BY_NAME)
     if unknown:

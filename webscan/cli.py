@@ -49,6 +49,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Hard cap on total HTTP requests for the scan (default 1000)",
     )
     parser.add_argument(
+        "--min-severity",
+        choices=[s.value for s in Severity],
+        help="Only report findings at or above this severity",
+    )
+    parser.add_argument(
         "--format", choices=["text", "json"], default="text", help="Output format (default text)"
     )
     parser.add_argument("--output", "-o", help="Write the report to a file instead of stdout")
@@ -132,6 +137,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         result = scanner.scan(args.target)
     finally:
         client.close()
+
+    if args.min_severity:
+        threshold = Severity(args.min_severity)
+        result.findings = [f for f in result.findings if f.severity >= threshold]
 
     output = render_json(result) if args.format == "json" else render_text(result)
     if args.output:
