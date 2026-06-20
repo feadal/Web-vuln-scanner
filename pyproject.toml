@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "webscan"
 version = "0.2.0"
-description = "A lightweight active web vulnerability scanner for authorized security testing"
+description = "Fast, hackable web vulnerability scanner — 30 OWASP-mapped checks, out-of-band detection, headless crawling, YAML templates and SARIF output, for authorized testing"
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }

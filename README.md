@@ -6,13 +6,16 @@
 [![Checks](https://img.shields.io/badge/checks-30-2ea043.svg)](#features)
 [![Tests](https://img.shields.io/badge/tests-85-2ea043.svg)](tests)
 
-**webscan** is a lightweight **active** web vulnerability scanner in Python for
-**authorized** penetration testing, security training and assessing your own apps.
+**webscan** is a fast, hackable **active** web vulnerability scanner in Python for
+**authorized** penetration testing, bug bounty and assessing your own apps.
 
-It crawls the target for inputs (URL parameters and form fields), then probes each
-one with benign payloads to **detect** real vulnerabilities — reflected XSS, SQL
-injection, OS command injection, path traversal/LFI and open redirects — alongside
-passive checks for security headers, cookies, TLS and information disclosure.
+It crawls the target (static, plus an optional headless browser for SPAs), discovers
+inputs, and runs **30 checks** across the OWASP Top 10 — SQL & NoSQL injection,
+context-aware reflected XSS, SSRF, SSTI, XXE, OS command injection, path traversal/LFI,
+open redirect, CRLF, JWT and mass-assignment, alongside passive recon for security
+headers, cookies, TLS, secrets, WAF and exposed files. Blind bugs are confirmed
+**out-of-band**, detections can be extended with **YAML templates**, and every finding
+is tagged with **OWASP / CWE / MITRE ATT&CK** and exportable to **SARIF**.
 
 > **Detection, not exploitation.** Probes are non-destructive: they trigger an
 > error, get reflected, read a world-readable file, or echo an arithmetic result.
