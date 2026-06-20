@@ -35,9 +35,13 @@ this tool; the authors are not. See [SECURITY.md](SECURITY.md).
 |---|---|---|
 | `xss` | Reflected cross-site scripting | Unique token in HTML metachars, checks for un-encoded reflection |
 | `sqli` | SQL injection | Error-based + boolean differential + time-based blind (`SLEEP`/`pg_sleep`/`WAITFOR`) |
+| `nosqli` | NoSQL injection | Operator payloads (`$ne`, `$gt`, `||`) that surface MongoDB/BSON errors |
 | `cmd-injection` | OS command injection | Arithmetic-echo probe (`$((A*B))`) — shell prints a product not in the payload |
+| `xxe` | XML external entity | XML params get an entity reading `/etc/passwd` |
+| `crlf` | CRLF / header injection | Newline payload injects a marker response header |
 | `ssti` | Server-side template injection | Template math (`{{A*B}}`, `${A*B}`, ...), often a path to RCE |
 | `lfi` | Local file inclusion | `php://filter` base64 wrapper confirms PHP source disclosure |
+| `ssrf` | Server-side request forgery | Cloud metadata endpoints + canary URL whose fetched content is reflected |
 | `path-traversal` | Path traversal | `../`-style payloads, confirms via `/etc/passwd` readback |
 | `open-redirect` | Open redirect | Benign external host in redirect params, inspects `Location` |
 
@@ -49,8 +53,13 @@ this tool; the authors are not. See [SECURITY.md](SECURITY.md).
 | `cookies` | Cookies without `Secure` / `HttpOnly` / `SameSite` |
 | `server-disclosure` | Version leaks via `Server`, `X-Powered-By` |
 | `tls` | Plain HTTP, no HTTPS redirect, invalid certificate |
-| `sensitive-files` | Exposed `.git/`, `.env`, backups, directory listing |
+| `sensitive-files` | Exposed `.git/`, `.env`, DB dumps, backups, directory listing |
 | `forms` | Forms over HTTP, password via GET, missing CSRF token |
+| `cors` | Permissive CORS (reflected Origin, wildcard, credentials) |
+| `host-header` | Spoofed `Host` / `X-Forwarded-Host` reflected (poisoning) |
+| `http-methods` | Dangerous methods enabled (`PUT`, `DELETE`, `TRACE`) |
+| `jwt` | JWTs with `alg:none`, weak HS256 secret, or no expiry |
+| `forced-browsing` | Exposed admin panels / debug endpoints (`/admin`, `/actuator`, `/graphql`, ...) |
 
 **Safety rails:** same-host crawl scope, a hard request budget (`--max-requests`),
 optional throttling (`--delay`), and a bounded crawl depth (`--max-pages`).
@@ -78,6 +87,15 @@ webscan https://example.com --checks xss,sqli,security-headers
 
 # Critical findings only (hide medium/low noise)
 webscan https://example.com --min-severity high
+
+# Probe common hidden parameters (page, file, url, id, ...)
+webscan https://example.com --guess-params
+
+# Scan behind a login (session cookie + custom header)
+webscan https://example.com --cookie "session=abc; role=admin" --header "Authorization: Bearer TOKEN"
+
+# HTML report
+webscan https://example.com --format html -o report.html
 
 # Tune scope / politeness
 webscan https://example.com --max-pages 20 --max-requests 500 --delay 0.2

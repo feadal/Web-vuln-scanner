@@ -1,8 +1,4 @@
-"""A thin, polite wrapper around :mod:`requests`.
-
-Centralises timeout, user-agent, TLS verification, inter-request throttling and
-a hard request budget so a single scan can never turn into a flood.
-"""
+"""A thin, polite wrapper around requests with a hard request budget."""
 
 from __future__ import annotations
 
@@ -18,11 +14,7 @@ DEFAULT_USER_AGENT = f"webscan/{__version__} (+https://github.com/feadal/Web-vul
 
 
 class BudgetExceeded(Exception):
-    """Raised when a scan reaches its configured maximum number of requests.
-
-    Deliberately *not* a :class:`requests.RequestException` so it propagates
-    past the per-check error handling and stops the whole scan cleanly.
-    """
+    """Raised when a scan reaches its configured maximum number of requests."""
 
 
 class HttpClient:
@@ -35,6 +27,8 @@ class HttpClient:
         delay: float = 0.0,
         max_redirects: int = 5,
         max_requests: int = 1000,
+        headers: Optional[dict] = None,
+        cookies: Optional[dict] = None,
     ) -> None:
         self.timeout = timeout
         self.verify_tls = verify_tls
@@ -45,6 +39,10 @@ class HttpClient:
         self.session = requests.Session()
         self.session.max_redirects = max_redirects
         self.session.headers.update({"User-Agent": user_agent})
+        if headers:
+            self.session.headers.update(headers)
+        if cookies:
+            self.session.cookies.update(cookies)
 
     def _throttle(self) -> None:
         if self.delay <= 0:
@@ -54,15 +52,8 @@ class HttpClient:
             time.sleep(self.delay - elapsed)
 
     def request(self, method: str, url: str, **kwargs) -> requests.Response:
-        """Perform a request, enforcing the budget, throttle and defaults.
-
-        Raises :class:`BudgetExceeded` once the request budget is spent and
-        :class:`requests.RequestException` on transport errors.
-        """
         if self.requests_made >= self.max_requests:
-            raise BudgetExceeded(
-                f"reached request budget of {self.max_requests}"
-            )
+            raise BudgetExceeded(f"reached request budget of {self.max_requests}")
         self._throttle()
         kwargs.setdefault("timeout", self.timeout)
         kwargs.setdefault("verify", self.verify_tls)
@@ -77,10 +68,6 @@ class HttpClient:
         return self.request("GET", url, **kwargs)
 
     def try_get(self, url: str, **kwargs) -> Optional[requests.Response]:
-        """Like :meth:`get` but returns ``None`` on transport errors.
-
-        Budget exhaustion still propagates so the scan can stop.
-        """
         try:
             return self.get(url, **kwargs)
         except requests.RequestException:

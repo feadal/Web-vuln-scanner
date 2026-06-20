@@ -11,7 +11,7 @@ from webscan import __version__
 from webscan.checks import all_active, all_names, all_passive, select
 from webscan.http_client import HttpClient
 from webscan.models import Severity
-from webscan.report import render_json, render_text
+from webscan.report import render_html, render_json, render_text
 from webscan.scanner import Scanner
 
 _BANNER = (
@@ -43,6 +43,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-pages", type=int, default=10, help="Max pages to crawl for inputs (default 10)"
     )
     parser.add_argument(
+        "--guess-params",
+        action="store_true",
+        help="Also probe common parameter names (page, file, url, id, ...)",
+    )
+    parser.add_argument(
         "--max-requests",
         type=int,
         default=1000,
@@ -54,7 +59,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Only report findings at or above this severity",
     )
     parser.add_argument(
-        "--format", choices=["text", "json"], default="text", help="Output format (default text)"
+        "--cookie",
+        help="Send a cookie header, e.g. 'session=abc; role=admin' (scan behind login)",
+    )
+    parser.add_argument(
+        "--header",
+        action="append",
+        default=[],
+        help="Add a request header 'Name: value' (repeatable)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=["text", "json", "html"],
+        default="text",
+        help="Output format (default text)",
     )
     parser.add_argument("--output", "-o", help="Write the report to a file instead of stdout")
     parser.add_argument(
@@ -87,6 +105,27 @@ def _print_checks() -> None:
     print("\nActive checks (send probes — authorized targets only):\n")
     for check in all_active():
         print(f"  {check.name.ljust(18)} {check.description}")
+
+
+def _parse_cookies(value: Optional[str]) -> dict:
+    if not value:
+        return {}
+    out = {}
+    for part in value.split(";"):
+        part = part.strip()
+        if "=" in part:
+            name, val = part.split("=", 1)
+            out[name.strip()] = val.strip()
+    return out
+
+
+def _parse_headers(values: Sequence[str]) -> dict:
+    out = {}
+    for item in values:
+        if ":" in item:
+            name, val = item.split(":", 1)
+            out[name.strip()] = val.strip()
+    return out
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -124,6 +163,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         verify_tls=not args.insecure,
         delay=args.delay,
         max_requests=args.max_requests,
+        headers=_parse_headers(args.header),
+        cookies=_parse_cookies(args.cookie),
     )
     scanner = Scanner(
         client=client,
@@ -131,6 +172,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         active_checks=active,
         active=bool(active),
         max_pages=args.max_pages,
+        guess_params=args.guess_params,
     )
 
     try:
@@ -142,7 +184,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         threshold = Severity(args.min_severity)
         result.findings = [f for f in result.findings if f.severity >= threshold]
 
-    output = render_json(result) if args.format == "json" else render_text(result)
+    output = _render(result, args.format)
     if args.output:
         with open(args.output, "w", encoding="utf-8") as fh:
             fh.write(output + "\n")
@@ -151,6 +193,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(output)
 
     return _exit_code(result, args.fail_on)
+
+
+def _render(result, fmt: str) -> str:
+    if fmt == "json":
+        return render_json(result)
+    if fmt == "html":
+        return render_html(result)
+    return render_text(result)
 
 
 def _split(value: str) -> list[str]:

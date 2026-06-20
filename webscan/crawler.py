@@ -1,9 +1,4 @@
-"""Discover injection points (URL parameters and form fields) on the target.
-
-The crawl is deliberately small and same-host only: it exists to find inputs to
-test, not to mirror the site. Bounded by ``max_pages`` and the client's request
-budget.
-"""
+"""Discover injection points (URL parameters and form fields) on the target."""
 
 from __future__ import annotations
 
@@ -13,6 +8,7 @@ from urllib.parse import parse_qsl, urljoin, urlparse, urlunparse
 
 from webscan.http_client import HttpClient
 from webscan.models import InjectionPoint
+from webscan.payloads import GUESSABLE_PARAMS
 
 _SKIP_INPUT_TYPES = {"submit", "button", "image", "file", "reset"}
 
@@ -21,12 +17,10 @@ _SKIP_INPUT_TYPES = {"submit", "button", "image", "file", "reset"}
 class _Form:
     action: str = ""
     method: str = "get"
-    fields: dict[str, str] = field(default_factory=dict)
+    fields: dict = field(default_factory=dict)
 
 
 class _LinkFormParser(HTMLParser):
-    """Collect anchor hrefs and forms (with their named fields)."""
-
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.links: list[str] = []
@@ -85,14 +79,16 @@ def _points_from_form(form: _Form, page_url: str) -> list[InjectionPoint]:
     if method == "GET":
         action_url = _strip_query(action_url)
     return [
-        InjectionPoint(
-            method=method,
-            url=action_url,
-            param=name,
-            params=dict(form.fields),
-            source="form",
-        )
+        InjectionPoint(method=method, url=action_url, param=name, params=dict(form.fields), source="form")
         for name in form.fields
+    ]
+
+
+def guessed_points(base_url: str) -> list[InjectionPoint]:
+    base = _strip_query(base_url)
+    return [
+        InjectionPoint(method="GET", url=base, param=name, params={name: "1"}, source="guess")
+        for name in GUESSABLE_PARAMS
     ]
 
 
@@ -103,7 +99,6 @@ def discover(
     *,
     max_pages: int = 10,
 ) -> list[InjectionPoint]:
-    """Crawl ``base_url`` (same host) and return a de-duplicated list of points."""
     host = urlparse(base_url).hostname
     queue: list[str] = [base_url]
     htmls: dict[str, str] = {base_url: base_html}

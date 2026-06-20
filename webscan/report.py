@@ -1,7 +1,8 @@
-"""Render a :class:`~webscan.models.ScanResult` as text or JSON."""
+"""Render a ScanResult as text, JSON or HTML."""
 
 from __future__ import annotations
 
+import html
 import json
 import sys
 
@@ -15,6 +16,13 @@ _COLORS = {
     Severity.INFO: "\033[90m",
 }
 _RESET = "\033[0m"
+
+_HTML_COLORS = {
+    Severity.HIGH: "#d83232",
+    Severity.MEDIUM: "#d98c1f",
+    Severity.LOW: "#2f7fb5",
+    Severity.INFO: "#888",
+}
 
 
 def render_json(result: ScanResult) -> str:
@@ -59,6 +67,44 @@ def render_text(result: ScanResult, *, color: bool | None = None) -> str:
             lines.append(f"  ! {err}")
 
     return "\n".join(lines)
+
+
+def render_html(result: ScanResult) -> str:
+    rows = []
+    for f in result.sorted_findings():
+        color = _HTML_COLORS[f.severity]
+        conf = " (tentative)" if f.confidence == "tentative" else ""
+        rows.append(
+            "<tr>"
+            f'<td><span style="color:{color};font-weight:600">{f.severity.value.upper()}</span></td>'
+            f"<td>{html.escape(f.check)}</td>"
+            f"<td>{html.escape(f.title)}{conf}</td>"
+            f"<td>{html.escape(f.param)}</td>"
+            f"<td><code>{html.escape(f.evidence)}</code></td>"
+            "</tr>"
+        )
+    counts = result.counts()
+    summary = ", ".join(
+        f"{counts[s.value]} {s.value}"
+        for s in (Severity.HIGH, Severity.MEDIUM, Severity.LOW, Severity.INFO)
+        if counts[s.value]
+    )
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'>"
+        f"<title>webscan report — {html.escape(result.target)}</title>"
+        "<style>body{font-family:system-ui,sans-serif;margin:2rem;color:#222}"
+        "table{border-collapse:collapse;width:100%}"
+        "th,td{border:1px solid #ddd;padding:6px 10px;text-align:left;font-size:14px;vertical-align:top}"
+        "th{background:#f4f4f4}code{font-size:12px;word-break:break-all}</style></head><body>"
+        f"<h1>webscan {__version__}</h1>"
+        f"<p>Target: <strong>{html.escape(result.target)}</strong><br>"
+        f"Injection points: {result.injection_points} · Requests: {result.requests_made}<br>"
+        f"Findings: {summary or '0'}</p>"
+        "<table><thead><tr><th>Severity</th><th>Check</th><th>Title</th>"
+        "<th>Param</th><th>Evidence</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></body></html>"
+    )
 
 
 def _summary_line(result: ScanResult) -> str:

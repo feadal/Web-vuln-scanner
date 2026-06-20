@@ -1,7 +1,4 @@
-"""Probe for a small, well-known set of accidentally exposed files.
-
-A short, fixed list of common paths fetched once each. It never brute-forces.
-"""
+"""Probe for a small, well-known set of accidentally exposed files."""
 
 from __future__ import annotations
 
@@ -12,12 +9,27 @@ from webscan.models import Finding, ScanContext, Severity
 
 _PATHS = {
     "/.git/config": (Severity.HIGH, "Exposed .git repository — the source can be downloaded."),
+    "/.git/HEAD": (Severity.HIGH, "Exposed .git metadata — the repository may be dumpable."),
     "/.env": (Severity.HIGH, "Environment files often hold secrets and DB credentials."),
+    "/.env.local": (Severity.HIGH, "Local environment file may hold secrets."),
+    "/.env.bak": (Severity.HIGH, "Backup of the environment file may hold secrets."),
     "/.svn/entries": (Severity.MEDIUM, "SVN metadata leaks the code structure and history."),
+    "/.aws/credentials": (Severity.HIGH, "AWS credentials file exposed."),
+    "/id_rsa": (Severity.HIGH, "Private SSH key exposed."),
     "/.DS_Store": (Severity.LOW, "macOS file leaks the names of files in the directory."),
     "/backup.zip": (Severity.MEDIUM, "A reachable backup may contain source code or data."),
+    "/backup.sql": (Severity.HIGH, "A reachable database dump may contain all data."),
+    "/database.sql": (Severity.HIGH, "A reachable database dump may contain all data."),
+    "/dump.sql": (Severity.HIGH, "A reachable database dump may contain all data."),
     "/wp-config.php.bak": (Severity.HIGH, "WordPress config backup with credentials."),
+    "/config.php.bak": (Severity.HIGH, "Config backup may expose credentials."),
+    "/web.config": (Severity.MEDIUM, "IIS config file should not be served directly."),
     "/.htaccess": (Severity.LOW, "Apache config file should not be served directly."),
+    "/.npmrc": (Severity.MEDIUM, ".npmrc may contain registry auth tokens."),
+    "/.bash_history": (Severity.MEDIUM, "Shell history may leak commands and secrets."),
+    "/docker-compose.yml": (Severity.LOW, "Compose file may reveal services and credentials."),
+    "/phpinfo.php": (Severity.MEDIUM, "phpinfo() leaks configuration and paths."),
+    "/info.php": (Severity.MEDIUM, "phpinfo() leaks configuration and paths."),
     "/server-status": (Severity.MEDIUM, "Apache mod_status leaks requests and internal addresses."),
 }
 
@@ -27,7 +39,7 @@ _ENV_MARKERS = ("=", "\n")
 
 class SensitiveFilesCheck(PassiveCheck):
     name = "sensitive-files"
-    description = "Checks for exposed sensitive files (.git, .env, backups)"
+    description = "Checks for exposed sensitive files (.git, .env, backups, dumps)"
 
     def run(self, ctx: ScanContext) -> list[Finding]:
         findings: list[Finding] = []
@@ -73,7 +85,6 @@ class SensitiveFilesCheck(PassiveCheck):
 
 
 def _looks_real(path: str, resp: "requests.Response") -> bool:
-    """Reduce false positives from sites that return 200 for everything."""
     body = resp.text or ""
     if path.endswith("/.git/config"):
         return _GIT_MARKER in body
