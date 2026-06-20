@@ -30,8 +30,6 @@ def point(url="https://t.test/p", param="q", value="1", method="GET"):
     return InjectionPoint(method=method, url=url, param=param, params={param: value})
 
 
-# --- reflected XSS ----------------------------------------------------------
-
 @responses.activate
 def test_xss_detected_when_reflected_raw():
     def cb(request):
@@ -53,8 +51,6 @@ def test_xss_not_detected_when_encoded():
     assert findings == []
 
 
-# --- SQL injection ----------------------------------------------------------
-
 @responses.activate
 def test_sqli_error_based_detected():
     def cb(request):
@@ -71,8 +67,6 @@ def test_sqli_error_based_detected():
     assert findings[0].severity == Severity.HIGH
 
 
-# --- path traversal ---------------------------------------------------------
-
 @responses.activate
 def test_path_traversal_detected():
     def cb(request):
@@ -86,8 +80,6 @@ def test_path_traversal_detected():
     assert findings and findings[0].severity == Severity.HIGH
 
 
-# --- open redirect ----------------------------------------------------------
-
 @responses.activate
 def test_open_redirect_detected():
     def cb(request):
@@ -100,19 +92,16 @@ def test_open_redirect_detected():
 
 @responses.activate
 def test_open_redirect_ignored_for_non_redirect_param():
-    # 'q' is not redirect-like and its value isn't a URL -> not even probed.
     findings = OpenRedirectCheck().test(point(param="q", value="hello"), HttpClient())
     assert findings == []
 
-
-# --- command injection ------------------------------------------------------
 
 @responses.activate
 def test_command_injection_detected():
     def cb(request):
         cmd = _param(request, "host")
         m = re.search(r"\$\(\((\d+)\*(\d+)\)\)", cmd)
-        if m:  # simulate a shell evaluating the arithmetic
+        if m:
             product = int(m.group(1)) * int(m.group(2))
             return (200, {}, f"PING output wvs{product}end ...")
         return (200, {}, "PING output ...")
@@ -122,8 +111,6 @@ def test_command_injection_detected():
     assert findings and findings[0].title == "OS command injection"
 
 
-# --- crawler ----------------------------------------------------------------
-
 def test_crawler_discovers_query_and_form_inputs():
     base_url = "https://t.test/page?id=1"
     html = (
@@ -132,12 +119,11 @@ def test_crawler_discovers_query_and_form_inputs():
         '<input type="submit" value="go"></form>'
         '<a href="/other?x=2">link</a>'
     )
-    # max_pages=1 keeps it from fetching the linked page over the network.
     points = crawler.discover(HttpClient(), base_url, html, max_pages=1)
     names = {p.param for p in points}
-    assert "id" in names  # query param
-    assert {"user", "pass"} <= names  # form fields
-    assert "go" not in names  # submit button skipped
+    assert "id" in names
+    assert {"user", "pass"} <= names
+    assert "go" not in names
     login = [p for p in points if p.param == "user"][0]
     assert login.method == "POST"
     assert login.url == "https://t.test/login"

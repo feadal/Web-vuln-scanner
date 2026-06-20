@@ -24,14 +24,12 @@ def test_scan_collects_findings_from_insecure_site():
         headers={"Server": "nginx/1.18.0", "Set-Cookie": "sid=1; Path=/"},
         content_type="text/html",
     )
-    # sensitive-files probes return 404
     responses.add(responses.GET, "https://example.com/.git/config", status=404)
 
     result = Scanner().scan("https://example.com")
 
     assert isinstance(result, ScanResult)
     assert result.max_severity() is not None
-    # We expect at least the missing-header and cookie findings.
     checks_hit = {f.check for f in result.findings}
     assert "security-headers" in checks_hit
     assert "cookies" in checks_hit
@@ -39,7 +37,6 @@ def test_scan_collects_findings_from_insecure_site():
 
 @responses.activate
 def test_scan_records_error_when_target_unreachable():
-    # No responses registered -> connection error.
     result = Scanner().scan("https://unreachable.invalid")
     assert result.errors
     assert result.findings == []

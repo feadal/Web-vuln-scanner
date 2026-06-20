@@ -8,12 +8,11 @@ import sys
 from webscan import __version__
 from webscan.models import ScanResult, Severity
 
-# ANSI colours per severity (only used when the stream is a TTY).
 _COLORS = {
-    Severity.HIGH: "\033[1;31m",  # bold red
-    Severity.MEDIUM: "\033[33m",  # yellow
-    Severity.LOW: "\033[36m",  # cyan
-    Severity.INFO: "\033[90m",  # grey
+    Severity.HIGH: "\033[1;31m",
+    Severity.MEDIUM: "\033[33m",
+    Severity.LOW: "\033[36m",
+    Severity.INFO: "\033[90m",
 }
 _RESET = "\033[0m"
 

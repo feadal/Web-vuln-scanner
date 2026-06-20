@@ -29,10 +29,8 @@ def make_ctx(resp, html=""):
     return ScanContext(target="https://example.com", client=HttpClient(), base_response=resp, base_html=html)
 
 
-# --- security headers -------------------------------------------------------
-
 def test_missing_headers_are_reported():
-    resp = make_response(headers={})  # no security headers at all
+    resp = make_response(headers={})
     findings = SecurityHeadersCheck().run(make_ctx(resp))
     titles = {f.title for f in findings}
     assert any("HSTS" in t for t in titles)
@@ -85,8 +83,6 @@ def test_parse_max_age():
     assert _parse_max_age("includeSubDomains") is None
 
 
-# --- cookies ----------------------------------------------------------------
-
 def test_cookie_without_flags_is_flagged():
     resp = make_response(headers={"Set-Cookie": "session=abc123; Path=/"})
     findings = CookieFlagsCheck().run(make_ctx(resp))
@@ -111,8 +107,6 @@ def test_cookie_parsing_helpers():
     assert _cookie_attrs(raw) == {"path", "secure", "httponly"}
 
 
-# --- server disclosure ------------------------------------------------------
-
 def test_server_version_disclosure():
     resp = make_response(headers={"Server": "nginx/1.18.0", "X-Powered-By": "PHP/8.1.2"})
     findings = ServerDisclosureCheck().run(make_ctx(resp))
@@ -125,8 +119,6 @@ def test_server_without_version_is_info():
     findings = ServerDisclosureCheck().run(make_ctx(resp))
     assert findings[0].severity == Severity.INFO
 
-
-# --- forms ------------------------------------------------------------------
 
 def test_password_form_get_method_is_high():
     html = """

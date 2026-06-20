@@ -44,7 +44,7 @@ LANDING = """<!doctype html><html><head><title>Vulnerable demo</title></head>
 
 
 class Handler(BaseHTTPRequestHandler):
-    def log_message(self, *args):  # quiet
+    def log_message(self, *args):
         pass
 
     def _send(self, body: str, status: int = 200, headers: dict | None = None):
@@ -65,10 +65,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             return self._send(LANDING)
 
-        if path == "/search":  # reflected XSS — input echoed without encoding
+        if path == "/search":
             return self._send(f"<html>Results for: {q.get('q', '')}</html>")
 
-        if path == "/item":  # error-based SQLi — quote breaks the "query"
+        if path == "/item":
             item_id = q.get("id", "")
             if "'" in item_id or '"' in item_id:
                 return self._send(
@@ -77,23 +77,23 @@ class Handler(BaseHTTPRequestHandler):
                 )
             return self._send(f"<html>Item #{html.escape(item_id)}</html>")
 
-        if path == "/download":  # path traversal — naive file read
+        if path == "/download":
             name = q.get("file", "")
             if "etc/passwd" in name or name == "/etc/passwd":
                 return self._send("root:x:0:0:root:/root:/bin/bash\n")
             return self._send("readme.txt: hello\n")
 
-        if path == "/go":  # open redirect — Location straight from input
+        if path == "/go":
             return self._send("", status=302, headers={"Location": q.get("next", "/")})
 
-        if path == "/ping":  # command injection — input handed to a shell
+        if path == "/ping":
             host = q.get("host", "127.0.0.1")
             try:
                 out = subprocess.run(
                     f"echo pinging {host}", shell=True, capture_output=True,
                     text=True, timeout=3,
                 ).stdout
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 out = str(exc)
             return self._send(f"<pre>{out}</pre>")
 

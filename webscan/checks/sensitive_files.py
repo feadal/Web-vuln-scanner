@@ -10,7 +10,6 @@ import requests
 from webscan.checks.base import PassiveCheck
 from webscan.models import Finding, ScanContext, Severity
 
-# path -> (severity, why it matters)
 _PATHS = {
     "/.git/config": (Severity.HIGH, "Exposed .git repository — the source can be downloaded."),
     "/.env": (Severity.HIGH, "Environment files often hold secrets and DB credentials."),
@@ -22,7 +21,6 @@ _PATHS = {
     "/server-status": (Severity.MEDIUM, "Apache mod_status leaks requests and internal addresses."),
 }
 
-# A body that looks like real content rather than a custom 200-styled 404.
 _GIT_MARKER = "[core]"
 _ENV_MARKERS = ("=", "\n")
 
@@ -81,5 +79,4 @@ def _looks_real(path: str, resp: "requests.Response") -> bool:
         return _GIT_MARKER in body
     if path.endswith("/.env"):
         return all(m in body for m in _ENV_MARKERS) and "<html" not in body.lower()
-    # For the rest, a non-empty, non-HTML-error body is a reasonable signal.
     return len(resp.content) > 0

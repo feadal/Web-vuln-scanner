@@ -57,7 +57,6 @@ class SqlInjectionCheck(ActiveCheck):
             return None
 
         base_len, true_len, false_len = (len(r.text or "") for r in (base, truthy, falsy))
-        # TRUE resembles the baseline while FALSE diverges clearly.
         true_like_base = abs(true_len - base_len) <= max(40, base_len * 0.02)
         false_diverges = abs(false_len - true_len) > max(80, true_len * 0.05)
         if true_like_base and false_diverges:

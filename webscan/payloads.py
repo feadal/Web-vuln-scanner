@@ -9,12 +9,9 @@ from __future__ import annotations
 
 import re
 
-# --- SQL injection ----------------------------------------------------------
 
-# Single payloads likely to break a naive query and surface a DB error.
 SQLI_ERROR_PAYLOADS = ["'", '"', "')", "';", "' OR '1"]
 
-# Signatures of database error messages, by engine.
 SQL_ERROR_SIGNATURES = [
     re.compile(p, re.IGNORECASE)
     for p in [
@@ -35,7 +32,6 @@ SQL_ERROR_SIGNATURES = [
     ]
 ]
 
-# Boolean-based differential pair (tentative signal).
 SQLI_TRUE_PAYLOAD = "' OR '1'='1"
 SQLI_FALSE_PAYLOAD = "' AND '1'='2"
 
@@ -51,8 +47,6 @@ def match_sql_error(body: str) -> str:
     return ""
 
 
-# --- Path traversal / LFI ---------------------------------------------------
-
 TRAVERSAL_PAYLOADS = [
     "../../../../../../../../etc/passwd",
     "....//....//....//....//etc/passwd",
@@ -60,7 +54,6 @@ TRAVERSAL_PAYLOADS = [
     "/etc/passwd",
 ]
 
-# A real /etc/passwd line looks like "root:x:0:0:root:/root:/bin/bash".
 PASSWD_RE = re.compile(r"root:.*?:0:0:")
 
 
@@ -71,9 +64,6 @@ def match_passwd(body: str) -> str:
     return m.group(0) if m else ""
 
 
-# --- Open redirect ----------------------------------------------------------
-
-# Parameter names that commonly carry a redirect target.
 REDIRECT_PARAM_NAMES = {
     "url", "u", "next", "redirect", "redirect_uri", "redirect_url", "return",
     "returnurl", "return_url", "dest", "destination", "continue", "goto", "to",
@@ -81,10 +71,6 @@ REDIRECT_PARAM_NAMES = {
 }
 
 
-# --- Reflected XSS -----------------------------------------------------------
-
-# The probe carries a unique token plus HTML metacharacters. If the metachars
-# come back un-encoded around the token, the page reflects markup -> XSS.
 def xss_probe(token: str) -> str:
     return f'wvs{token}"\'><svg/onload=1>'
 
@@ -95,11 +81,8 @@ def xss_reflected_raw(body: str, token: str) -> bool:
     marker = f"wvs{token}"
     if marker not in body:
         return False
-    # The angle brackets/tag survived un-encoded next to our token.
     return f"{marker}\"'><svg/onload=1>" in body or "<svg/onload=1>" in body
 
-
-# --- OS command injection ---------------------------------------------------
 
 def cmdi_payloads(a: int, b: int, left: str, right: str) -> list[str]:
     """Arithmetic-echo probes: the shell prints ``left + (a*b) + right``.

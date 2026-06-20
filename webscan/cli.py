@@ -156,5 +156,5 @@ def _exit_code(result, fail_on: str) -> int:
     return 0
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":
     sys.exit(main())

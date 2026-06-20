@@ -36,7 +36,6 @@ class TlsCheck(PassiveCheck):
             findings.extend(self._check_http_redirect(ctx))
             return findings
 
-        # We are on HTTPS — verify the certificate is actually trusted.
         if not ctx.client.verify_tls:
             findings.append(
                 self.finding(
@@ -84,7 +83,6 @@ class TlsCheck(PassiveCheck):
                 )
             ]
         except requests.RequestException:
-            # Transient/transport issues are not a TLS finding.
             return []
         return []
 

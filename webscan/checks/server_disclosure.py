@@ -7,7 +7,6 @@ import re
 from webscan.checks.base import PassiveCheck
 from webscan.models import Finding, ScanContext, Severity
 
-# Headers that commonly disclose technology / version details.
 _DISCLOSURE_HEADERS = {
     "server": "Server",
     "x-powered-by": "X-Powered-By",

@@ -15,7 +15,6 @@ class CookieFlagsCheck(PassiveCheck):
         if resp is None:
             return []
 
-        # A single response may carry several Set-Cookie headers.
         raw_cookies = _raw_set_cookie_headers(resp)
         if not raw_cookies:
             return []
@@ -66,8 +65,6 @@ class CookieFlagsCheck(PassiveCheck):
 
 def _raw_set_cookie_headers(resp) -> list[str]:
     """Return every Set-Cookie header line, handling multiple cookies."""
-    # urllib3's HTTPHeaderDict (used by requests) joins repeated headers with
-    # ", " which is ambiguous for cookies. Prefer the raw header list if present.
     raw = getattr(resp, "raw", None)
     if raw is not None and getattr(raw, "headers", None) is not None:
         getlist = getattr(raw.headers, "getlist", None) or getattr(
@@ -86,5 +83,5 @@ def _cookie_name(raw: str) -> str:
 
 
 def _cookie_attrs(raw: str) -> set[str]:
-    parts = raw.split(";")[1:]  # skip the name=value pair
+    parts = raw.split(";")[1:]
     return {p.strip().split("=", 1)[0].lower() for p in parts if p.strip()}

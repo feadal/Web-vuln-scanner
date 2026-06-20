@@ -6,7 +6,7 @@ import enum
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
-if TYPE_CHECKING:  # pragma: no cover - typing only
+if TYPE_CHECKING:
     import requests
 
     from webscan.http_client import HttpClient
@@ -82,11 +82,11 @@ class InjectionPoint:
     check mutates exactly one of them (``param``) at a time.
     """
 
-    method: str  # "GET" or "POST"
-    url: str  # request URL (form action or page URL, without payload)
-    param: str  # the parameter currently under test
+    method: str
+    url: str
+    param: str
     params: dict[str, str] = field(default_factory=dict)
-    source: str = "query"  # "query" or "form"
+    source: str = "query"
 
     def label(self) -> str:
         return f"{self.method} {self.url} [{self.param}]"

@@ -63,7 +63,7 @@ class FormSecurityCheck(PassiveCheck):
         parser = _FormParser()
         try:
             parser.feed(ctx.base_html)
-        except Exception:  # malformed HTML — bail out quietly
+        except Exception:
             return []
 
         page_is_https = (
@@ -116,7 +116,6 @@ def _submits_over_http(action_url: str, page_is_https: bool) -> bool:
     scheme = urlparse(action_url).scheme.lower()
     if scheme == "http":
         return True
-    # Relative action on an HTTP page also submits over HTTP.
     if scheme == "" and not page_is_https:
         return True
     return False

@@ -14,7 +14,6 @@ from urllib.parse import parse_qsl, urljoin, urlparse, urlunparse
 from webscan.http_client import HttpClient
 from webscan.models import InjectionPoint
 
-# Input types we never fuzz (no useful value to mutate).
 _SKIP_INPUT_TYPES = {"submit", "button", "image", "file", "reset"}
 
 

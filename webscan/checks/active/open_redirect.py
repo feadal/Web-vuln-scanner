@@ -49,7 +49,6 @@ class OpenRedirectCheck(ActiveCheck):
     def _is_candidate(self, point: InjectionPoint) -> bool:
         if point.param.lower() in REDIRECT_PARAM_NAMES:
             return True
-        # Or a parameter whose current value already looks like a URL/path.
         value = point.params.get(point.param, "")
         return value.startswith(("http://", "https://", "/"))
 

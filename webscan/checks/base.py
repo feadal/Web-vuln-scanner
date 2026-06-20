@@ -31,11 +31,10 @@ class PassiveCheck(_FindingFactory):
     name = "base"
     description = ""
 
-    def run(self, ctx: ScanContext) -> list[Finding]:  # pragma: no cover - abstract
+    def run(self, ctx: ScanContext) -> list[Finding]:
         raise NotImplementedError
 
 
-#: Backwards-compatible alias used by the passive checks.
 Check = PassiveCheck
 
 
@@ -47,7 +46,7 @@ class ActiveCheck(_FindingFactory):
 
     def test(
         self, point: InjectionPoint, client: HttpClient
-    ) -> list[Finding]:  # pragma: no cover - abstract
+    ) -> list[Finding]:
         raise NotImplementedError
 
     def send(

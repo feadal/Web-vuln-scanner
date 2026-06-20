@@ -5,7 +5,6 @@ from __future__ import annotations
 from webscan.checks.base import Check
 from webscan.models import Finding, ScanContext, Severity
 
-# header -> (severity, human title, remediation)
 _EXPECTED_HEADERS = {
     "content-security-policy": (
         Severity.MEDIUM,
@@ -47,18 +46,14 @@ class SecurityHeadersCheck(Check):
             return []
 
         findings: list[Finding] = []
-        # requests' header mapping is case-insensitive.
         headers = resp.headers
         is_https = resp.url.lower().startswith("https://")
 
         for header, (severity, title, remediation) in _EXPECTED_HEADERS.items():
             if header in headers:
                 continue
-            # HSTS is only meaningful over HTTPS — skip it on plain HTTP targets,
-            # the tls check already flags the lack of HTTPS.
             if header == "strict-transport-security" and not is_https:
                 continue
-            # clickjacking protection can also be provided via CSP frame-ancestors.
             if header == "x-frame-options" and _has_frame_ancestors(headers):
                 continue
             findings.append(
@@ -79,7 +74,7 @@ class SecurityHeadersCheck(Check):
         hsts = headers.get("strict-transport-security", "")
         if hsts:
             max_age = _parse_max_age(hsts)
-            if max_age is not None and max_age < 15552000:  # < 180 days
+            if max_age is not None and max_age < 15552000:
                 out.append(
                     self.finding(
                         title="HSTS max-age is too short",

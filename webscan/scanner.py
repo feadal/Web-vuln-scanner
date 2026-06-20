@@ -56,7 +56,6 @@ class Scanner:
         result.requests_made = self.client.requests_made
         return result
 
-    # -- passive ------------------------------------------------------------
 
     def _run_passive(self, ctx: ScanContext, result: ScanResult) -> None:
         for check in self.passive_checks:
@@ -65,14 +64,13 @@ class Scanner:
             except BudgetExceeded as exc:
                 result.errors.append(f"Stopped early: {exc}")
                 return
-            except Exception as exc:  # one broken check shouldn't sink the scan
+            except Exception as exc:
                 log.warning("passive check %s raised: %s", check.name, exc)
                 result.errors.append(f"{check.name}: {exc}")
                 continue
             for f in findings:
                 result.add(f)
 
-    # -- active -------------------------------------------------------------
 
     def _run_active(self, base_url: str, base_html: str, result: ScanResult) -> None:
         try:
@@ -101,7 +99,6 @@ class Scanner:
         except BudgetExceeded as exc:
             result.errors.append(f"Stopped early: {exc}")
 
-    # -- helpers ------------------------------------------------------------
 
     def _fetch_base(self, target: str, result: ScanResult):
         try:
@@ -120,6 +117,5 @@ class Scanner:
 def _normalize_target(target: str) -> str:
     target = target.strip()
     if not target.startswith(("http://", "https://")):
-        # Default to https; the tls check will report if only http works.
         target = "https://" + target
     return target
