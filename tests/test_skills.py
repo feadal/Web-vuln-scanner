@@ -13,6 +13,7 @@ import responses
 
 from webscan.checks.forced_browsing import ForcedBrowsingCheck
 from webscan.checks.jwt import JwtCheck
+from webscan.checks.sensitive_files import SensitiveFilesCheck
 from webscan.http_client import HttpClient
 from webscan.models import ScanContext, Severity
 
@@ -84,3 +85,21 @@ def test_forced_browsing_suppressed_on_catch_all_200():
     responses.add(responses.GET, re.compile(r"https://t\.test/.*"), status=200, body="ok")
     findings = ForcedBrowsingCheck().run(ctx())
     assert findings == []
+
+
+@responses.activate
+def test_forced_browsing_ignores_blanket_403():
+    responses.add(responses.GET, re.compile(r"https://t\.test/.*"), status=403)
+    assert ForcedBrowsingCheck().run(ctx()) == []
+
+
+@responses.activate
+def test_forced_browsing_ignores_404():
+    responses.add(responses.GET, re.compile(r"https://t\.test/.*"), status=404)
+    assert ForcedBrowsingCheck().run(ctx()) == []
+
+
+@responses.activate
+def test_sensitive_files_soft_404_suppressed():
+    responses.add(responses.GET, re.compile(r"https://t\.test/.*"), status=200, body="generic catch-all page")
+    assert SensitiveFilesCheck().run(ctx()) == []

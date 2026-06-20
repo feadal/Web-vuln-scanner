@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import secrets
+
 import requests
 
 from webscan.checks.base import PassiveCheck
@@ -42,13 +44,14 @@ class SensitiveFilesCheck(PassiveCheck):
     description = "Checks for exposed sensitive files (.git, .env, backups, dumps)"
 
     def run(self, ctx: ScanContext) -> list[Finding]:
+        catch_all = self._catch_all_200(ctx)
         findings: list[Finding] = []
         for path, (severity, why) in _PATHS.items():
             url = ctx.client.join(ctx.target, path)
             resp = ctx.client.try_get(url, allow_redirects=False)
             if resp is None or resp.status_code != 200:
                 continue
-            if not _looks_real(path, resp):
+            if not _looks_real(path, resp, catch_all):
                 continue
             findings.append(
                 self.finding(
@@ -63,6 +66,11 @@ class SensitiveFilesCheck(PassiveCheck):
 
         findings.extend(self._directory_listing(ctx))
         return findings
+
+    def _catch_all_200(self, ctx: ScanContext) -> bool:
+        probe = ctx.client.join(ctx.target, "/wvs-" + secrets.token_hex(6) + ".txt")
+        resp = ctx.client.try_get(probe, allow_redirects=False)
+        return resp is not None and resp.status_code == 200
 
     def _directory_listing(self, ctx: ScanContext) -> list[Finding]:
         url = ctx.client.join(ctx.target, "/")
@@ -84,10 +92,10 @@ class SensitiveFilesCheck(PassiveCheck):
         return []
 
 
-def _looks_real(path: str, resp: "requests.Response") -> bool:
+def _looks_real(path: str, resp: "requests.Response", catch_all: bool = False) -> bool:
     body = resp.text or ""
     if path.endswith("/.git/config"):
         return _GIT_MARKER in body
     if path.endswith("/.env"):
         return all(m in body for m in _ENV_MARKERS) and "<html" not in body.lower()
-    return len(resp.content) > 0
+    return len(resp.content) > 0 and not catch_all

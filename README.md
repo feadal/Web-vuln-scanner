@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Checks](https://img.shields.io/badge/checks-30-2ea043.svg)](#features)
-[![Tests](https://img.shields.io/badge/tests-85-2ea043.svg)](tests)
+[![Tests](https://img.shields.io/badge/tests-88-2ea043.svg)](tests)
 
 **webscan** is a fast, hackable **active** web vulnerability scanner in Python for
 **authorized** penetration testing, bug bounty and assessing your own apps.
@@ -46,7 +46,7 @@ this tool; the authors are not. See [SECURITY.md](SECURITY.md).
 - 🔐 **Authenticated scanning** (`--cookie` / `--header`) + hidden-parameter discovery
 - 🎯 Context-aware XSS, multi-technique SQLi (error / boolean / time-based)
 - 📟 **Live progress** — phases, request counter and findings stream as they're found (`--quiet` to hush)
-- 🧪 **85 offline tests**, CI on Python 3.9–3.12
+- 🧪 **88 offline tests**, CI on Python 3.9–3.12
 
 ---
 

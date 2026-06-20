@@ -35,38 +35,27 @@ class ForcedBrowsingCheck(PassiveCheck):
     description = "Probes for exposed admin panels, dashboards and debug endpoints"
 
     def run(self, ctx: ScanContext) -> list[Finding]:
-        if self._catch_all_200(ctx):
+        if self._baseline_status(ctx) == 200:
             return []
         findings: list[Finding] = []
         for path, (severity, why) in _ENDPOINTS.items():
             url = ctx.client.join(ctx.target, path)
             resp = ctx.client.try_get(url, allow_redirects=False)
-            if resp is None:
+            if resp is None or resp.status_code != 200:
                 continue
-            if resp.status_code == 200:
-                findings.append(
-                    self.finding(
-                        title=f"Exposed endpoint: {path}",
-                        severity=severity,
-                        description=why,
-                        evidence=f"HTTP 200 at {url}",
-                        remediation="Restrict access (auth / IP allow-list) or remove the endpoint.",
-                        url=url,
-                    )
+            findings.append(
+                self.finding(
+                    title=f"Exposed endpoint: {path}",
+                    severity=severity,
+                    description=why,
+                    evidence=f"HTTP 200 at {url}",
+                    remediation="Restrict access (auth / IP allow-list) or remove the endpoint.",
+                    url=url,
                 )
-            elif resp.status_code in (401, 403):
-                findings.append(
-                    self.finding(
-                        title=f"Endpoint present but protected: {path}",
-                        severity=Severity.INFO,
-                        description=f"{why} (returns {resp.status_code}).",
-                        evidence=f"HTTP {resp.status_code} at {url}",
-                        url=url,
-                    )
-                )
+            )
         return findings
 
-    def _catch_all_200(self, ctx: ScanContext) -> bool:
+    def _baseline_status(self, ctx: ScanContext):
         probe = ctx.client.join(ctx.target, "/wvs-" + secrets.token_hex(6))
         resp = ctx.client.try_get(probe, allow_redirects=False)
-        return resp is not None and resp.status_code == 200
+        return resp.status_code if resp is not None else None
